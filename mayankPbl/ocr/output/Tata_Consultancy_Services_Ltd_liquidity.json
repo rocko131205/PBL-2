@@ -1,0 +1,15 @@
+{
+  "entity": {
+    "entity_id": "Tata Consultancy Services Ltd",
+    "source": "Bloomberg",
+    "currency": "INR",
+    "source_files": [
+      "00002300.pdf"
+    ]
+  },
+  "time_series": {
+    "equity": [],
+    "total_assets": [],
+    "total_liabilities": []
+  }
+}

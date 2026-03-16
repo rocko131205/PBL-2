@@ -1,0 +1,11 @@
+{
+  "entity": "Tata Consultancy Services Ltd",
+  "metrics": {
+    "asset_growth_rate": 6.651633244244211,
+    "liability_growth_rate": 6.651633244244211,
+    "equity_growth_rate": 3.4402602384927836,
+    "leverage_ratio": 1.4208821433974297,
+    "balance_sheet_risk": "low"
+  },
+  "analysis": "Tata Consultancy Services Ltd's balance sheet stability and leverage are both low, as evidenced by the low growth rates of its assets and liabilities (6.651633244244211% and 6.651633244244211%, respectively) and the low equity growth rate (3.4402602384927836%). The leverage ratio of 1.4208821433974297 indicates that the company has a moderate level of debt relative to its equity, which is generally considered healthy. However, the low balance sheet risk suggests that the company's financial health is stable and unlikely to experience significant changes in its balance sheet over time."
+}

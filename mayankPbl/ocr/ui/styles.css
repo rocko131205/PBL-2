@@ -1,0 +1,480 @@
+/* ============================================================
+   BLOOMBERG TERMINAL THEME — Explainable Financial Analysis
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap');
+
+/* ── Base ──────────────────────────────────────────────────── */
+html, body,
+.stApp,
+[class*="css"],
+p, span, div, label, input, textarea, select, button,
+.stMarkdown, .stText {
+    font-family: 'JetBrains Mono', 'Source Code Pro', 'IBM Plex Mono', monospace !important;
+}
+
+.stApp {
+    background-color: #0B0C10 !important;
+    color: #E6E6E6 !important;
+}
+
+/* ── Hide default Streamlit chrome ─────────────────────────── */
+#MainMenu          { visibility: hidden !important; }
+footer             { visibility: hidden !important; }
+header             { visibility: hidden !important; }
+[data-testid="stToolbar"]      { visibility: hidden !important; }
+[data-testid="stDecoration"]   { visibility: hidden !important; }
+[data-testid="stStatusWidget"] { visibility: hidden !important; }
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background-color: #080909 !important;
+    border-right: 1px solid #1F2028 !important;
+}
+
+[data-testid="stSidebar"] * {
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+[data-testid="stSidebar"] .stRadio label {
+    color: #CCCCCC !important;
+    font-size: 12px !important;
+    cursor: pointer;
+    padding: 4px 0;
+    display: block;
+    transition: color 0.15s;
+}
+
+[data-testid="stSidebar"] .stRadio label:hover {
+    color: #FFB000 !important;
+}
+
+[data-testid="stSidebar"] .stRadio [aria-checked="true"] + span {
+    color: #FFB000 !important;
+}
+
+/* Sidebar text inputs */
+[data-testid="stSidebar"] .stTextInput input {
+    background: #111217 !important;
+    border: 1px solid #2A2A35 !important;
+    color: #E6E6E6 !important;
+    font-size: 11px !important;
+    border-radius: 2px !important;
+    padding: 6px 8px !important;
+}
+
+[data-testid="stSidebar"] .stTextInput input:focus {
+    border-color: #FFB000 !important;
+    box-shadow: 0 0 0 1px #FFB00033 !important;
+}
+
+[data-testid="stSidebar"] .stTextInput label {
+    font-size: 10px !important;
+    color: #666 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+/* ── Headings ──────────────────────────────────────────────── */
+h1, h2, h3 {
+    color: #FFB000 !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+}
+
+h1 { font-size: 18px !important; }
+h2 { font-size: 15px !important; }
+h3 { font-size: 13px !important; }
+
+/* ── File Uploader ─────────────────────────────────────────── */
+[data-testid="stFileUploaderDropzone"],
+[data-testid="stFileUploadDropzone"] {
+    background-color: #111217 !important;
+    border: 2px dashed #2A2A35 !important;
+    border-radius: 3px !important;
+    transition: border-color 0.2s;
+}
+
+[data-testid="stFileUploaderDropzone"]:hover,
+[data-testid="stFileUploadDropzone"]:hover {
+    border-color: #FFB000 !important;
+}
+
+[data-testid="stFileUploaderDropzone"] span,
+[data-testid="stFileUploadDropzone"] span {
+    color: #888 !important;
+    font-size: 12px !important;
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.stButton > button {
+    background: transparent !important;
+    color: #FFB000 !important;
+    border: 1px solid #FFB000 !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
+    border-radius: 2px !important;
+    padding: 8px 20px !important;
+    transition: all 0.15s ease !important;
+}
+
+.stButton > button:hover {
+    background: #FFB000 !important;
+    color: #0B0C10 !important;
+    box-shadow: 0 0 12px #FFB00044 !important;
+}
+
+.stButton > button:active {
+    transform: translateY(1px) !important;
+}
+
+/* ── Expanders ─────────────────────────────────────────────── */
+[data-testid="stExpander"] {
+    background: #111217 !important;
+    border: 1px solid #1F2028 !important;
+    border-radius: 2px !important;
+}
+
+[data-testid="stExpander"] summary {
+    background: #111217 !important;
+    color: #CCCCCC !important;
+    font-size: 12px !important;
+}
+
+[data-testid="stExpander"] summary:hover {
+    color: #FFB000 !important;
+}
+
+/* ── DataFrames ────────────────────────────────────────────── */
+[data-testid="stDataFrame"] {
+    border: 1px solid #1F2028 !important;
+    border-radius: 2px !important;
+}
+
+[data-testid="stDataFrame"] th {
+    background: #111217 !important;
+    color: #FFB000 !important;
+    font-size: 11px !important;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+[data-testid="stDataFrame"] td {
+    background: #0B0C10 !important;
+    color: #E6E6E6 !important;
+    font-size: 11px !important;
+    border-color: #1F2028 !important;
+}
+
+/* ── Alert / Info / Warning / Success boxes ────────────────── */
+[data-testid="stAlert"] {
+    background: #111217 !important;
+    border-radius: 2px !important;
+    font-size: 12px !important;
+}
+
+.stInfo    { border-left: 3px solid #00BFFF !important; }
+.stSuccess { border-left: 3px solid #00FF88 !important; }
+.stWarning { border-left: 3px solid #FFB000 !important; }
+.stError   { border-left: 3px solid #FF4444 !important; }
+
+/* ── Spinner ───────────────────────────────────────────────── */
+.stSpinner > div {
+    border-top-color: #FFB000 !important;
+}
+
+/* ── Caption ───────────────────────────────────────────────── */
+.stCaption,
+[data-testid="stCaptionContainer"] {
+    color: #555 !important;
+    font-size: 11px !important;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0B0C10; }
+::-webkit-scrollbar-thumb { background: #2A2A35; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #FFB000; }
+
+/* ── Main content area ─────────────────────────────────────── */
+.block-container {
+    padding: 0 2rem 2rem !important;
+    max-width: 100% !important;
+}
+
+/* ── Custom components (HTML injected via st.markdown) ──────── */
+
+/* Top Bar */
+.bb-topbar {
+    background: #111217;
+    border-bottom: 2px solid #FFB000;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: -1rem -2rem 1.5rem -2rem;
+    font-size: 11px;
+}
+
+.bb-topbar-title {
+    color: #FFB000;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.bb-topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    color: #777;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+}
+
+.bb-topbar-entity {
+    color: #FFB000;
+    font-weight: 600;
+}
+
+.bb-status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #00FF88;
+    margin-right: 5px;
+    animation: bb-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes bb-pulse {
+    0%,100% { opacity: 1; box-shadow: 0 0 4px #00FF88; }
+    50%      { opacity: 0.3; box-shadow: none; }
+}
+
+/* Section header */
+.bb-section {
+    border-bottom: 1px solid #1F2028;
+    padding-bottom: 8px;
+    margin: 28px 0 16px;
+}
+
+.bb-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #FFB000;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+}
+
+.bb-section-sub {
+    font-size: 10px;
+    color: #555;
+    margin-top: 3px;
+    letter-spacing: 0.05em;
+}
+
+/* Metric cards grid */
+.bb-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 12px 0 20px;
+}
+
+.bb-metric-card {
+    background: #111217;
+    border: 1px solid #1F2028;
+    border-left: 3px solid #FFB000;
+    padding: 14px 16px;
+    border-radius: 2px;
+}
+
+.bb-metric-card.cyan  { border-left-color: #00BFFF; }
+.bb-metric-card.green { border-left-color: #00FF88; }
+.bb-metric-card.red   { border-left-color: #FF6B35; }
+
+.bb-metric-label {
+    font-size: 9px;
+    color: #777;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin-bottom: 6px;
+}
+
+.bb-metric-value {
+    font-size: 19px;
+    font-weight: 700;
+    color: #FFB000;
+    letter-spacing: -0.01em;
+}
+
+.bb-metric-card.cyan  .bb-metric-value { color: #00BFFF; }
+.bb-metric-card.green .bb-metric-value { color: #00FF88; }
+.bb-metric-card.red   .bb-metric-value { color: #FF6B35; }
+
+.bb-metric-period {
+    font-size: 9px;
+    color: #444;
+    margin-top: 4px;
+    text-transform: uppercase;
+}
+
+/* Agent output cards */
+.bb-agent-card {
+    background: #111217;
+    border: 1px solid #1F2028;
+    border-left: 4px solid #FFB000;
+    border-radius: 2px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+}
+
+.bb-agent-card.liq  { border-left-color: #00BFFF; }
+.bb-agent-card.bs   { border-left-color: #FF6B35; }
+.bb-agent-card.xref { border-left-color: #00FF88; }
+
+.bb-agent-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: #FFB000;
+    border-bottom: 1px solid #1F2028;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+}
+
+.bb-agent-card.liq  .bb-agent-title { color: #00BFFF; }
+.bb-agent-card.bs   .bb-agent-title { color: #FF6B35; }
+.bb-agent-card.xref .bb-agent-title { color: #00FF88; }
+
+.bb-metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid #161619;
+    font-size: 11px;
+}
+
+.bb-metric-row:last-of-type { border-bottom: none; }
+.bb-mkey { color: #777; letter-spacing: 0.05em; }
+.bb-mval { color: #E6E6E6; font-weight: 600; }
+
+.bb-analysis {
+    margin-top: 14px;
+    font-size: 11px;
+    color: #BBBBBB;
+    line-height: 1.7;
+    border-top: 1px solid #1F2028;
+    padding-top: 12px;
+}
+
+/* Skip/error card */
+.bb-skip-card {
+    background: #120A0A;
+    border: 1px solid #3A1515;
+    border-left: 4px solid #FF4444;
+    padding: 12px 16px;
+    border-radius: 2px;
+    margin-bottom: 10px;
+    font-size: 11px;
+    color: #FF7777;
+}
+
+/* Basel panels */
+.bb-basel-panel {
+    background: #111217;
+    border: 1px solid #1F2028;
+    border-top: 3px solid #FFB000;
+    padding: 24px 28px;
+    border-radius: 2px;
+    margin-bottom: 14px;
+}
+
+.bb-pillar-badge {
+    display: inline-block;
+    background: #1A1600;
+    border: 1px solid #FFB000;
+    color: #FFB000;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 2px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-right: 8px;
+    margin-bottom: 10px;
+}
+
+.bb-body-text {
+    font-size: 12px;
+    color: #CCCCCC;
+    line-height: 1.8;
+    margin-bottom: 10px;
+}
+
+/* Workflow page */
+.bb-workflow-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 12px 0;
+    font-size: 10px;
+}
+
+.bb-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #888;
+}
+
+.bb-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+/* Divider */
+.bb-hr {
+    border: none;
+    border-top: 1px solid #1F2028;
+    margin: 16px 0;
+}
+
+/* Sidebar logo area */
+.bb-sidebar-logo {
+    text-align: center;
+    padding: 20px 0 24px;
+    border-bottom: 1px solid #1F2028;
+    margin-bottom: 16px;
+}
+
+.bb-sidebar-logo-icon { font-size: 24px; }
+
+.bb-sidebar-logo-text {
+    font-size: 10px;
+    font-weight: 700;
+    color: #FFB000;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-top: 6px;
+}
+
+/* Sidebar nav label */
+.bb-nav-label {
+    font-size: 9px;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 6px;
+    padding: 0 4px;
+}

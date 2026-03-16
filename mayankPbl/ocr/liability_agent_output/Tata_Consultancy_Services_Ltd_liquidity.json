@@ -1,0 +1,13 @@
+{
+  "entity": "Tata Consultancy Services Ltd",
+  "metrics": {
+    "avg_current_ratio": 3.442453030172449,
+    "working_capital_trend": "increasing",
+    "liquidity_volatility": 60246.206727062905,
+    "asset_growth_rate": 6.651633244244211,
+    "liability_growth_rate": 6.651633244244211,
+    "equity_growth_rate": 3.4402602384927836,
+    "liquidity_risk_flag": "low"
+  },
+  "analysis": "Liquidity risk flag: low. Tata Consultancy Services Ltd's liquidity health and funding stability are generally considered to be moderate. The average current ratio of 3.44 suggests that the company has a healthy balance between its current assets and liabilities, which is important for maintaining liquidity. The working capital trend of increasing indicates that the company's financial position is improving over time, which is a positive sign. The liquidity volatility of 60246.21 indicates that the company's financial position is relatively stable, with no significant fluctuations in working capital. The asset growth rate of 6.65% and liability growth rate of 6.65% are both positive, indicating that the company is growing its assets and liabilities at a moderate rate. The equity growth rate of 3.44% is also positive, indicating that the company is growing its equity at a moderate rate. Overall, Tata Consultancy Services Ltd's liquidity health and funding stability are considered to be moderate, with a focus on maintaining a healthy balance between its current assets and liabilities."
+}

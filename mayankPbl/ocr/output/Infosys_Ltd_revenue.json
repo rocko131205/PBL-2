@@ -1,0 +1,425 @@
+{
+  "entity": {
+    "entity_id": "Infosys Ltd",
+    "source": "Bloomberg",
+    "currency": "INR",
+    "source_files": [
+      "00001388.pdf",
+      "00001407.pdf"
+    ]
+  },
+  "time_series": {
+    "basic_eps": [
+      {
+        "period": "2019-FY",
+        "value": 36.32
+      },
+      {
+        "period": "2020-FY",
+        "value": 38.89
+      },
+      {
+        "period": "2021-FY",
+        "value": 45.67
+      },
+      {
+        "period": "2022-FY",
+        "value": 52.51
+      },
+      {
+        "period": "2023-FY",
+        "value": 57.84
+      },
+      {
+        "period": "2024-FY",
+        "value": 63.13
+      },
+      {
+        "period": "2025-FY",
+        "value": 64.07
+      },
+      {
+        "period": "2026-FY",
+        "value": 69.02
+      },
+      {
+        "period": "2027-FY",
+        "value": 70.15
+      }
+    ],
+    "cost_of_revenue": [
+      {
+        "period": "2020-FY",
+        "value": 538670.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 607320.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 654130.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 819980.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1023530.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1074130.0
+      },
+      {
+        "period": "2026-FY",
+        "value": 1133470.0
+      },
+      {
+        "period": "2027-FY",
+        "value": 1199620.0
+      }
+    ],
+    "depreciation": [
+      {
+        "period": "2021-FY",
+        "value": 20350.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 21660.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 22330.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 37630.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 26850.0
+      },
+      {
+        "period": "2026-FY",
+        "value": 23600.0
+      },
+      {
+        "period": "2027-FY",
+        "value": 31710.0
+      }
+    ],
+    "diluted_eps": [
+      {
+        "period": "2019-FY",
+        "value": 36.27
+      },
+      {
+        "period": "2020-FY",
+        "value": 38.83
+      },
+      {
+        "period": "2021-FY",
+        "value": 45.57
+      },
+      {
+        "period": "2022-FY",
+        "value": 52.4
+      },
+      {
+        "period": "2023-FY",
+        "value": 57.75
+      },
+      {
+        "period": "2024-FY",
+        "value": 63.03
+      },
+      {
+        "period": "2025-FY",
+        "value": 63.91
+      },
+      {
+        "period": "2026-FY",
+        "value": 68.9
+      },
+      {
+        "period": "2027-FY",
+        "value": 70.15
+      }
+    ],
+    "ebitda": [
+      {
+        "period": "2019-FY",
+        "value": 208910.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 224390.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 280790.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 316610.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 354130.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 365460.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 392840.0
+      },
+      {
+        "period": "2026-FY",
+        "value": 409690.0
+      },
+      {
+        "period": "2027-FY",
+        "value": 418178.45
+      }
+    ],
+    "gross_profit": [
+      {
+        "period": "2019-FY",
+        "value": 288080.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 300590.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 350590.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 396430.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 444140.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 462570.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 496430.0
+      },
+      {
+        "period": "2026-FY",
+        "value": 532110.0
+      },
+      {
+        "period": "2027-FY",
+        "value": 562169.1
+      }
+    ],
+    "income_tax": [
+      {
+        "period": "2020-FY",
+        "value": 56310.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 53680.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 72050.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 79640.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 92140.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 97400.0
+      },
+      {
+        "period": "2026-FY",
+        "value": 108580.0
+      },
+      {
+        "period": "2027-FY",
+        "value": 108580.0
+      }
+    ],
+    "interest_expense": [
+      {
+        "period": "2026-FY",
+        "value": 0.0
+      },
+      {
+        "period": "2027-FY",
+        "value": 0.0
+      }
+    ],
+    "net_income": [
+      {
+        "period": "2019-FY",
+        "value": 157897.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 165601.69
+      },
+      {
+        "period": "2021-FY",
+        "value": 193731.2
+      },
+      {
+        "period": "2022-FY",
+        "value": 221047.95
+      },
+      {
+        "period": "2023-FY",
+        "value": 241821.8
+      },
+      {
+        "period": "2024-FY",
+        "value": 261263.02
+      },
+      {
+        "period": "2025-FY",
+        "value": 265341.56
+      },
+      {
+        "period": "2026-FY",
+        "value": 285488.0
+      },
+      {
+        "period": "2027-FY",
+        "value": 291078.6
+      }
+    ],
+    "operating_income": [
+      {
+        "period": "2019-FY",
+        "value": 188800.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 195460.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 248120.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 281850.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 311880.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 318680.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 344720.0
+      },
+      {
+        "period": "2026-FY",
+        "value": 361910.0
+      },
+      {
+        "period": "2027-FY",
+        "value": 370911.77
+      }
+    ],
+    "pretax_income": [
+      {
+        "period": "2019-FY",
+        "value": 210410.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 220070.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 266280.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 301100.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 333220.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 359880.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 376080.0
+      },
+      {
+        "period": "2026-FY",
+        "value": 388610.0
+      },
+      {
+        "period": "2027-FY",
+        "value": 402646.64
+      }
+    ],
+    "revenue": [
+      {
+        "period": "2019-FY",
+        "value": 826750.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 3624141.36
+      },
+      {
+        "period": "2021-FY",
+        "value": 3745951.45
+      },
+      {
+        "period": "2022-FY",
+        "value": 3869978.7
+      },
+      {
+        "period": "2023-FY",
+        "value": 3873732.15
+      },
+      {
+        "period": "2024-FY",
+        "value": 4276004.13
+      },
+      {
+        "period": "2025-FY",
+        "value": 4843966.71
+      },
+      {
+        "period": "2026-FY",
+        "value": 5037116.24
+      },
+      {
+        "period": "2027-FY",
+        "value": 5260012.05
+      }
+    ]
+  }
+}
