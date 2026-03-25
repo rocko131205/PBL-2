@@ -1,0 +1,223 @@
+{
+  "entity": {
+    "entity_id": "Tata Consultancy Services Ltd",
+    "source": "Bloomberg",
+    "currency": "INR",
+    "source_files": [
+      "00002300.pdf",
+      "00001325.pdf"
+    ]
+  },
+  "time_series": {
+    "current_assets": [
+      {
+        "period": "2016-FY",
+        "value": 632140.0
+      },
+      {
+        "period": "2017-FY",
+        "value": 803160.0
+      },
+      {
+        "period": "2018-FY",
+        "value": 812240.0
+      },
+      {
+        "period": "2019-FY",
+        "value": 921310.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 902370.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 992800.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1083100.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1102700.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1129840.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1230110.0
+      }
+    ],
+    "current_liabilities": [
+      {
+        "period": "2016-FY",
+        "value": 155690.0
+      },
+      {
+        "period": "2017-FY",
+        "value": 145120.0
+      },
+      {
+        "period": "2018-FY",
+        "value": 178280.0
+      },
+      {
+        "period": "2019-FY",
+        "value": 220840.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 270600.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 341550.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 423510.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 435580.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 461040.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 530010.0
+      }
+    ],
+    "equity": [
+      {
+        "period": "2016-FY",
+        "value": 735440.0
+      },
+      {
+        "period": "2017-FY",
+        "value": 886810.0
+      },
+      {
+        "period": "2018-FY",
+        "value": 876430.0
+      },
+      {
+        "period": "2019-FY",
+        "value": 920090.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 868630.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 892300.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 919660.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 933240.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 934420.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 978970.0
+      }
+    ],
+    "total_assets": [
+      {
+        "period": "2016-FY",
+        "value": 912130.0
+      },
+      {
+        "period": "2017-FY",
+        "value": 1053530.0
+      },
+      {
+        "period": "2018-FY",
+        "value": 1084090.0
+      },
+      {
+        "period": "2019-FY",
+        "value": 1170530.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 1230130.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 1328810.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1436340.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1457690.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1485720.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1617550.0
+      }
+    ],
+    "total_liabilities": [
+      {
+        "period": "2016-FY",
+        "value": 912130.0
+      },
+      {
+        "period": "2017-FY",
+        "value": 1053530.0
+      },
+      {
+        "period": "2018-FY",
+        "value": 1084090.0
+      },
+      {
+        "period": "2019-FY",
+        "value": 1170530.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 1230130.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 1328810.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1436340.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1457690.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1485720.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1617550.0
+      }
+    ]
+  }
+}

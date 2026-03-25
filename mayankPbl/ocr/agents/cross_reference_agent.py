@@ -24,20 +24,40 @@ def run(
     revenue: dict[str, Any],
     liquidity: dict[str, Any],
     balance_sheet: dict[str, Any],
+    sentiment: dict[str, Any] | None = None,
     base_url: str,
     model: str,
     api_key: str = "local",
 ) -> dict[str, Any]:
-    """Generate a cross-referenced explanation using only agent metrics."""
+    """Generate a cross-referenced explanation using only agent metrics.
 
-    # Only pass metrics to the LLM, not raw time series.
+    Args:
+        sentiment: Optional output from the Sentiment Agent. When provided,
+                   public-perception context is included in the LLM prompt.
+    """
+    # Only pass pre-computed metrics to the LLM, never raw time-series data.
+    inputs: dict[str, Any] = {
+        "revenue_metrics": revenue.get("metrics"),
+        "liquidity_metrics": liquidity.get("metrics"),
+        "balance_sheet_metrics": balance_sheet.get("metrics"),
+    }
+    must_include = [
+        "a short revenue summary",
+        "a short liquidity summary",
+        "a short balance sheet/leverage summary",
+    ]
+    if sentiment:
+        inputs["sentiment_metrics"] = sentiment.get("metrics")
+        inputs["sentiment_analysis_snippet"] = (
+            (sentiment.get("analysis") or "")[:300] or None
+        )
+        must_include.append("a short public sentiment summary")
+
+    must_include.append("one integrated concluding sentence")
+
     payload = {
         "entity": entity,
-        "inputs": {
-            "revenue_metrics": revenue.get("metrics"),
-            "liquidity_metrics": liquidity.get("metrics"),
-            "balance_sheet_metrics": balance_sheet.get("metrics"),
-        },
+        "inputs": inputs,
         "requirements": {
             "no_new_numbers": True,
             "no_credit_decisions": True,
@@ -56,16 +76,14 @@ def run(
     )
 
     human = {
-        "task": "Cross-reference the metrics to describe overall financial trends and highlight any consistency or tension between signals.",
+        "task": (
+            "Cross-reference all provided metrics to describe overall financial and "
+            "public-perception trends, highlighting consistency or tension between signals."
+        ),
         **payload,
         "output": {
             "format": "plain_text",
-            "must_include": [
-                "a short revenue summary",
-                "a short liquidity summary",
-                "a short balance sheet/leverage summary",
-                "one integrated concluding sentence",
-            ],
+            "must_include": must_include,
         },
     }
 
@@ -87,6 +105,7 @@ def run(
             "revenue": revenue.get("metrics"),
             "liquidity": liquidity.get("metrics"),
             "balance_sheet": balance_sheet.get("metrics"),
+            "sentiment": sentiment.get("metrics") if sentiment else None,
         },
         "analysis": text.strip(),
     }

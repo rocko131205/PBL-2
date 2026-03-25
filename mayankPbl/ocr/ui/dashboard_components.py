@@ -204,7 +204,12 @@ def render_cross_ref_card(output: dict[str, Any]) -> None:
 
     # Summarise each sub-agent's key metric
     summary_rows = ""
-    colours = {"revenue": "#FFB000", "liquidity": "#00BFFF", "balance_sheet": "#FF6B35"}
+    colours = {
+        "revenue": "#FFB000",
+        "liquidity": "#00BFFF",
+        "balance_sheet": "#FF6B35",
+        "sentiment": "#CC88FF",
+    }
     for key, colour in colours.items():
         sub = nested.get(key) or {}
         if not sub:
@@ -214,6 +219,7 @@ def render_cross_ref_card(output: dict[str, Any]) -> None:
             "revenue":       ("cagr", "CAGR"),
             "liquidity":     ("liquidity_risk_flag", "LIQUIDITY RISK"),
             "balance_sheet": ("balance_sheet_risk",  "BS RISK"),
+            "sentiment":     ("dominant_sentiment",  "PUBLIC SENTIMENT"),
         }.get(key, (None, ""))
         field, label = representative
         val = sub.get(field, "—") if field else "—"

@@ -21,6 +21,7 @@ from agents import (
     cross_reference_agent,
     liquidity_agent,
     revenue_agent,
+    sentiment_agent,
 )
 from ocr.pdf_parser import parse_pdf_to_json
 from ui.dashboard_components import (
@@ -34,9 +35,10 @@ from ui.dashboard_components import (
     render_top_bar,
 )
 
-_DEFAULT_BASE_URL = "http://127.0.0.1:1234/v1"
-_DEFAULT_MODEL    = "qwen2.5-coder-1.5b-instruct-mlx"
-_DEFAULT_API_KEY  = "local"
+_DEFAULT_BASE_URL    = "http://127.0.0.1:1234/v1"
+_DEFAULT_MODEL       = "qwen2.5-coder-1.5b-instruct-mlx"
+_DEFAULT_API_KEY     = "local"
+_DEFAULT_NEWS_API_KEY = ""
 
 
 def _safe_run(name: str, fn) -> dict[str, Any]:
@@ -69,7 +71,7 @@ def _available_fields(payload: dict[str, Any]) -> set[str]:
 
 # ── Page 1 ────────────────────────────────────────────────────────────────────
 
-def page_upload(base_url: str, model: str, api_key: str) -> None:
+def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "") -> None:
     render_section_header(
         "Upload Bloomberg Financial Statement",
         subtitle="Upload Income Statement + Balance Sheet PDFs for full analysis",
@@ -125,11 +127,12 @@ def page_upload(base_url: str, model: str, api_key: str) -> None:
     missing_liq  = sorted(required_liq - avail)
     missing_bs   = sorted(required_bs  - avail)
 
-    cols = st.columns(4)
+    cols = st.columns(5)
     statuses = [
         ("REVENUE",       "revenue" in avail,                      "#FFB000"),
         ("LIQUIDITY",     not missing_liq,                          "#00BFFF"),
         ("BALANCE SHEET", not missing_bs,                           "#FF6B35"),
+        ("SENTIMENT",     bool(news_api_key and news_api_key.strip()), "#CC88FF"),
         ("CROSS REF",     not missing_liq and not missing_bs,       "#00FF88"),
     ]
     for col, (name, ready, colour) in zip(cols, statuses):
@@ -166,18 +169,49 @@ def page_upload(base_url: str, model: str, api_key: str) -> None:
                 bs_out = _safe_run("Balance Sheet Agent",
                     lambda: balance_sheet_agent.run(json_path=bs_path, base_url=base_url, model=model, api_key=api_key))
 
+        # Sentiment Agent — optional; skipped gracefully if no NewsAPI key provided
+        _news_key = news_api_key.strip() if news_api_key else ""
+        if not _news_key:
+            sentiment_out: dict = {"error": "Sentiment Agent skipped — add a NewsAPI key in the sidebar (newsapi.org)."}
+        else:
+            with st.spinner("Sentiment Agent…"):
+                _entity_for_sentiment = entity  # capture for lambda closure
+                _key_for_sentiment = _news_key
+                sentiment_out = _safe_run(
+                    "Sentiment Agent",
+                    lambda: sentiment_agent.run(
+                        company_name=_entity_for_sentiment,
+                        news_api_key=_key_for_sentiment,
+                        base_url=base_url,
+                        model=model,
+                        api_key=api_key,
+                    ),
+                )
+
+        # Pass sentiment to cross-reference only if it succeeded
+        _sentiment_ok = sentiment_out and not isinstance(sentiment_out.get("error"), str)
         any_err = any(isinstance(x.get("error"), str) for x in [rev_out, liq_out, bs_out])
         if any_err:
-            cross_out = {"error": "Cross Reference Agent skipped — requires all agents to succeed."}
+            cross_out = {"error": "Cross Reference Agent skipped — requires Revenue, Liquidity, and Balance Sheet agents to succeed."}
         else:
             with st.spinner("Cross Reference Agent…"):
-                cross_out = _safe_run("Cross Reference Agent",
-                    lambda: cross_reference_agent.run(entity=entity, revenue=rev_out, liquidity=liq_out,
-                        balance_sheet=bs_out, base_url=base_url, model=model, api_key=api_key))
+                cross_out = _safe_run(
+                    "Cross Reference Agent",
+                    lambda: cross_reference_agent.run(
+                        entity=entity,
+                        revenue=rev_out,
+                        liquidity=liq_out,
+                        balance_sheet=bs_out,
+                        sentiment=sentiment_out if _sentiment_ok else None,
+                        base_url=base_url,
+                        model=model,
+                        api_key=api_key,
+                    ),
+                )
 
         st.session_state["agent_outputs"] = {
             "entity": entity, "revenue": rev_out, "liquidity": liq_out,
-            "balance_sheet": bs_out, "cross_reference": cross_out,
+            "balance_sheet": bs_out, "sentiment": sentiment_out, "cross_reference": cross_out,
         }
         st.success("Analysis complete — navigate to Financial Analysis to view results.")
 
@@ -185,10 +219,13 @@ def page_upload(base_url: str, model: str, api_key: str) -> None:
     if outputs:
         render_section_header("Agent Status Summary")
         for label, key, variant in [
-            ("Revenue Agent", "revenue", ""), ("Liquidity Agent", "liquidity", "liq"),
-            ("Balance Sheet Agent", "balance_sheet", "bs"), ("Cross Reference Agent", "cross_reference", "xref"),
+            ("Revenue Agent", "revenue", ""),
+            ("Liquidity Agent", "liquidity", "liq"),
+            ("Balance Sheet Agent", "balance_sheet", "bs"),
+            ("Sentiment Agent", "sentiment", ""),
+            ("Cross Reference Agent", "cross_reference", "xref"),
         ]:
-            render_agent_card(label, outputs[key], css_variant=variant)
+            render_agent_card(label, outputs.get(key, {}), css_variant=variant)
 
 
 # ── Page 2 ────────────────────────────────────────────────────────────────────
@@ -205,29 +242,34 @@ def page_workflow() -> None:
             <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#3B2800"></span>Revenue Agent</div>
             <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#003040"></span>Liquidity Agent</div>
             <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#3B1800"></span>Balance Sheet Agent</div>
+            <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#2A0040"></span>Sentiment Agent</div>
             <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#002010"></span>Cross Reference</div>
         </div>""", unsafe_allow_html=True)
 
     nodes = [
         Node(id="pdf",   label="PDF\nInput",            color="#1A1A2E", shape="box",     size=20, font={"color":"#CCCCCC","size":12}, title="Bloomberg Financial Statement PDF(s)"),
+        Node(id="news",  label="News\nAPI",              color="#1A1A2E", shape="box",     size=20, font={"color":"#CC88FF","size":12}, title="NewsAPI — latest company news headlines (newsapi.org)"),
         Node(id="ocr",   label="OCR\nParser",            color="#0D3B66", shape="box",     size=20, font={"color":"#00BFFF","size":12}, title="<b>OCR Parser</b><br>Extracts IS + BS data from PDFs<br>Writes 4 JSON files to output/"),
         Node(id="rev",   label="Revenue\nAgent",         color="#3B2800", shape="ellipse", size=22, font={"color":"#FFB000","size":12}, title=agent_tooltip_html("Revenue Agent",       outputs.get("revenue"))),
         Node(id="liq",   label="Liquidity\nAgent",       color="#003040", shape="ellipse", size=22, font={"color":"#00BFFF","size":12}, title=agent_tooltip_html("Liquidity Agent",     outputs.get("liquidity"))),
         Node(id="bs",    label="Balance Sheet\nAgent",   color="#3B1800", shape="ellipse", size=22, font={"color":"#FF6B35","size":12}, title=agent_tooltip_html("Balance Sheet Agent", outputs.get("balance_sheet"))),
+        Node(id="sent",  label="Sentiment\nAgent",       color="#2A0040", shape="ellipse", size=22, font={"color":"#CC88FF","size":12}, title=agent_tooltip_html("Sentiment Agent",     outputs.get("sentiment"))),
         Node(id="cross", label="Cross\nReference\nAgent",color="#002010", shape="box",     size=24, font={"color":"#00FF88","size":12}, title=agent_tooltip_html("Cross Reference Agent",outputs.get("cross_reference"))),
         Node(id="out",   label="Explainable\nOutput",    color="#1A1A2E", shape="box",     size=20, font={"color":"#E6E6E6","size":12}, title="Final explainable financial analysis report"),
     ]
     edges = [
         Edge(source="pdf",   target="ocr",   color="#333344", width=2),
+        Edge(source="news",  target="sent",  color="#CC88FF", width=2),
         Edge(source="ocr",   target="rev",   color="#FFB000", width=1),
         Edge(source="ocr",   target="liq",   color="#00BFFF", width=1),
         Edge(source="ocr",   target="bs",    color="#FF6B35", width=1),
         Edge(source="rev",   target="cross", color="#FFB000", width=1, dashes=True),
         Edge(source="liq",   target="cross", color="#00BFFF", width=1, dashes=True),
         Edge(source="bs",    target="cross", color="#FF6B35", width=1, dashes=True),
+        Edge(source="sent",  target="cross", color="#CC88FF", width=1, dashes=True),
         Edge(source="cross", target="out",   color="#00FF88", width=2),
     ]
-    config = Config(width="100%", height=420, directed=True, physics=False, hierarchical=True,
+    config = Config(width="100%", height=520, directed=True, physics=False, hierarchical=True,
                     hierarchical_sort_method="directed", nodeHighlightBehavior=True, highlightColor="#FFB000", collapsible=False)
     agraph(nodes=nodes, edges=edges, config=config)
 
@@ -238,6 +280,7 @@ def page_workflow() -> None:
         with c1:
             render_agent_card("Revenue Agent",       outputs.get("revenue", {}),       css_variant="")
             render_agent_card("Balance Sheet Agent", outputs.get("balance_sheet", {}), css_variant="bs")
+            render_agent_card("Sentiment Agent",     outputs.get("sentiment", {}),     css_variant="")
         with c2:
             render_agent_card("Liquidity Agent",     outputs.get("liquidity", {}),     css_variant="liq")
             render_cross_ref_card(outputs.get("cross_reference", {}))
@@ -273,13 +316,20 @@ def page_analysis() -> None:
         render_section_header("Balance Sheet Agent", subtitle="Leverage & Asset Growth")
         render_agent_card("Balance Sheet Agent", outputs.get("balance_sheet", {}), css_variant="bs", icon="◇")
     with c4:
-        render_section_header("Cross Reference Agent", subtitle="Integrated Explainable Summary")
-        render_cross_ref_card(outputs.get("cross_reference", {}))
+        render_section_header("Sentiment Agent", subtitle="Public Perception from Latest News")
+        render_agent_card("Sentiment Agent", outputs.get("sentiment", {}), css_variant="", icon="◉")
+
+    render_hr()
+    render_section_header("Cross Reference Agent", subtitle="Integrated Explainable Summary — Financial + Sentiment")
+    render_cross_ref_card(outputs.get("cross_reference", {}))
 
     render_hr()
     render_section_header("Raw Agent Outputs", subtitle="Full JSON — audit trail")
-    for label, key in [("Revenue Agent","revenue"),("Liquidity Agent","liquidity"),
-                        ("Balance Sheet Agent","balance_sheet"),("Cross Reference Agent","cross_reference")]:
+    for label, key in [
+        ("Revenue Agent", "revenue"), ("Liquidity Agent", "liquidity"),
+        ("Balance Sheet Agent", "balance_sheet"), ("Sentiment Agent", "sentiment"),
+        ("Cross Reference Agent", "cross_reference"),
+    ]:
         with st.expander(f"{label}"):
             st.json(outputs.get(key, {}))
 
@@ -380,6 +430,13 @@ def main() -> None:
         api_key  = st.text_input("API Key",  value=_DEFAULT_API_KEY, type="password")
 
         render_hr()
+        st.markdown('<div class="bb-nav-label" style="margin-top:8px;">📰  News Settings</div>', unsafe_allow_html=True)
+        news_api_key = st.text_input(
+            "NewsAPI Key", value=_DEFAULT_NEWS_API_KEY, type="password",
+            help="Free key at newsapi.org — enables the Sentiment Agent",
+        )
+
+        render_hr()
         has_data    = bool(st.session_state.get("ocr_cache"))
         has_results = bool(st.session_state.get("agent_outputs"))
         st.markdown(
@@ -389,7 +446,7 @@ def main() -> None:
             f"</div>", unsafe_allow_html=True)
 
     if "Upload" in page:
-        page_upload(base_url, model, api_key)
+        page_upload(base_url, model, api_key, news_api_key)
     elif "Workflow" in page:
         page_workflow()
     elif "Analysis" in page:
