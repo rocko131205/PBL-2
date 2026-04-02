@@ -1,0 +1,120 @@
+{
+  "entity": {
+    "entity_id": "Yes Bank Limited",
+    "source": "yfinance",
+    "currency": "INR",
+    "source_files": [
+      "YESBANK.NS"
+    ]
+  },
+  "time_series": {
+    "revenue": [
+      {
+        "period": "2022-FY",
+        "value": 91172932000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 93697163000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 139782765000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 168299614000.0
+      }
+    ],
+    "net_income": [
+      {
+        "period": "2022-FY",
+        "value": 10640534000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 7358186000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 12852015000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 24464926000.0
+      }
+    ],
+    "interest_expense": [
+      {
+        "period": "2022-FY",
+        "value": 125284351000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 147997602000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 195272521000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 219983652000.0
+      }
+    ],
+    "pretax_income": [
+      {
+        "period": "2022-FY",
+        "value": 10640534000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 9813279000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 15376886000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 32239412000.0
+      }
+    ],
+    "income_tax": [
+      {
+        "period": "2022-FY",
+        "value": 3696360000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 2455100000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 2524870000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 7773410000.0
+      }
+    ],
+    "depreciation": [
+      {
+        "period": "2022-FY",
+        "value": 4033317000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 4334178000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 5455502000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 4933874000.0
+      }
+    ]
+  }
+}

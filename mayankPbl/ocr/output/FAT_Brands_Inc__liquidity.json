@@ -1,0 +1,102 @@
+{
+  "entity": {
+    "entity_id": "FAT Brands Inc.",
+    "source": "yfinance",
+    "currency": "USD",
+    "source_files": [
+      "FAT"
+    ]
+  },
+  "time_series": {
+    "total_assets": [
+      {
+        "period": "2021-FY",
+        "value": 1270032000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1213303000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1388238000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1289178000.0
+      }
+    ],
+    "current_assets": [
+      {
+        "period": "2021-FY",
+        "value": 119039000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 95701000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 121009000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 88034000.0
+      }
+    ],
+    "total_liabilities": [
+      {
+        "period": "2021-FY",
+        "value": 1291687000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1372481000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1644101000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1744890000.0
+      }
+    ],
+    "current_liabilities": [
+      {
+        "period": "2021-FY",
+        "value": 198488000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 267020000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 276602000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 298316000.0
+      }
+    ],
+    "equity": [
+      {
+        "period": "2021-FY",
+        "value": -21655000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": -159178000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": -255863000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": -455712000.0
+      }
+    ]
+  }
+}

@@ -1,0 +1,174 @@
+{
+  "entity": {
+    "entity_id": "Reliance Industries Limited",
+    "source": "yfinance",
+    "currency": "INR",
+    "source_files": [
+      "RELIANCE.NS"
+    ]
+  },
+  "time_series": {
+    "revenue": [
+      {
+        "period": "2022-FY",
+        "value": 6959630000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 8778350000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 9010640000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 9646930000000.0
+      }
+    ],
+    "gross_profit": [
+      {
+        "period": "2022-FY",
+        "value": 1642850000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 2059370000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 2264650000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 2420060000000.0
+      }
+    ],
+    "operating_income": [
+      {
+        "period": "2022-FY",
+        "value": 787630000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1020150000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1116660000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1124620000000.0
+      }
+    ],
+    "net_income": [
+      {
+        "period": "2022-FY",
+        "value": 607050000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 667020000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 696210000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 696480000000.0
+      }
+    ],
+    "interest_expense": [
+      {
+        "period": "2022-FY",
+        "value": 144380000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 189580000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 217720000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 221210000000.0
+      }
+    ],
+    "pretax_income": [
+      {
+        "period": "2022-FY",
+        "value": 821540000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 940460000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1043400000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1060170000000.0
+      }
+    ],
+    "income_tax": [
+      {
+        "period": "2022-FY",
+        "value": 159700000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 203760000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 257070000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 252300000000.0
+      }
+    ],
+    "depreciation": [
+      {
+        "period": "2022-FY",
+        "value": 297820000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 403030000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 508320000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 531360000000.0
+      }
+    ],
+    "cost_of_revenue": [
+      {
+        "period": "2022-FY",
+        "value": 5316780000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 6718980000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 6745990000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 7226870000000.0
+      }
+    ]
+  }
+}

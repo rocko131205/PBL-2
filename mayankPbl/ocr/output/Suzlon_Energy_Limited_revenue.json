@@ -1,0 +1,174 @@
+{
+  "entity": {
+    "entity_id": "Suzlon Energy Limited",
+    "source": "yfinance",
+    "currency": "INR",
+    "source_files": [
+      "SUZLON.NS"
+    ]
+  },
+  "time_series": {
+    "revenue": [
+      {
+        "period": "2022-FY",
+        "value": 65199500000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 58542900000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 64025700000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 107633700000.0
+      }
+    ],
+    "gross_profit": [
+      {
+        "period": "2022-FY",
+        "value": 19766100000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 18538300000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 21997900000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 35860200000.0
+      }
+    ],
+    "operating_income": [
+      {
+        "period": "2022-FY",
+        "value": 6310400000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 5857800000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 8363700000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 16180600000.0
+      }
+    ],
+    "net_income": [
+      {
+        "period": "2022-FY",
+        "value": -1995900000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 28490100000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 6603500000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 20716300000.0
+      }
+    ],
+    "interest_expense": [
+      {
+        "period": "2022-FY",
+        "value": 7025700000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 3829700000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1056500000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1056800000.0
+      }
+    ],
+    "pretax_income": [
+      {
+        "period": "2022-FY",
+        "value": 4000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 28917100000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 6594900000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 14466300000.0
+      }
+    ],
+    "income_tax": [
+      {
+        "period": "2022-FY",
+        "value": 1665900000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 44200000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": -8600000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": -6250000000.0
+      }
+    ],
+    "depreciation": [
+      {
+        "period": "2022-FY",
+        "value": 2598400000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 2596800000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1896000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 2591900000.0
+      }
+    ],
+    "cost_of_revenue": [
+      {
+        "period": "2022-FY",
+        "value": 45433400000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 40004600000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 42027800000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 71773500000.0
+      }
+    ]
+  }
+}

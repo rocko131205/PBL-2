@@ -1,0 +1,66 @@
+{
+  "entity": {
+    "entity_id": "Yes Bank Limited",
+    "source": "yfinance",
+    "currency": "INR",
+    "source_files": [
+      "YESBANK.NS"
+    ]
+  },
+  "time_series": {
+    "total_assets": [
+      {
+        "period": "2022-FY",
+        "value": 3185777353000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 3552041341000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 4063615459000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 4241159328000.0
+      }
+    ],
+    "total_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 2848787667000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 3144859584000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 3642063603000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 3762802626000.0
+      }
+    ],
+    "equity": [
+      {
+        "period": "2022-FY",
+        "value": 336989686000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 407181757000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 421551856000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 478324161000.0
+      }
+    ]
+  }
+}

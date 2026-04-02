@@ -1,0 +1,192 @@
+{
+  "entity": {
+    "entity_id": "Apple Inc.",
+    "source": "yfinance",
+    "currency": "USD",
+    "source_files": [
+      "AAPL"
+    ]
+  },
+  "time_series": {
+    "total_assets": [
+      {
+        "period": "2022-FY",
+        "value": 352755000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 352583000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 364980000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 359241000000.0
+      }
+    ],
+    "cash_and_equivalents": [
+      {
+        "period": "2022-FY",
+        "value": 23646000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 29965000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 29943000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 35934000000.0
+      }
+    ],
+    "non_current_assets": [
+      {
+        "period": "2022-FY",
+        "value": 217350000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 209017000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 211993000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 211284000000.0
+      }
+    ],
+    "total_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 302083000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 290437000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 308030000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 285508000000.0
+      }
+    ],
+    "non_current_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 148101000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 145129000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 131638000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 119877000000.0
+      }
+    ],
+    "long_term_debt": [
+      {
+        "period": "2022-FY",
+        "value": 98959000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 95281000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 85750000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 78328000000.0
+      }
+    ],
+    "short_term_debt": [
+      {
+        "period": "2022-FY",
+        "value": 21110000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 15807000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 20879000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 20329000000.0
+      }
+    ],
+    "total_debt": [
+      {
+        "period": "2022-FY",
+        "value": 132480000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 111088000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 106629000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 98657000000.0
+      }
+    ],
+    "equity": [
+      {
+        "period": "2022-FY",
+        "value": 50672000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 62146000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 56950000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 73733000000.0
+      }
+    ],
+    "retained_earnings": [
+      {
+        "period": "2022-FY",
+        "value": -3068000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": -214000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": -19154000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": -14264000000.0
+      }
+    ]
+  }
+}

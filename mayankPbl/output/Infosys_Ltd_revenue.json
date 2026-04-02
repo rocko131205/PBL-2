@@ -1,0 +1,14 @@
+{
+  "entity": {
+    "entity_id": "Infosys Ltd",
+    "source": "Bloomberg",
+    "currency": "INR",
+    "source_files": [
+      "00001407.pdf"
+    ]
+  },
+  "time_series": {
+    "net_income": [],
+    "revenue": []
+  }
+}

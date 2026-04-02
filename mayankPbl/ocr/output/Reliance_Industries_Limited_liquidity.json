@@ -1,0 +1,102 @@
+{
+  "entity": {
+    "entity_id": "Reliance Industries Limited",
+    "source": "yfinance",
+    "currency": "INR",
+    "source_files": [
+      "RELIANCE.NS"
+    ]
+  },
+  "time_series": {
+    "total_assets": [
+      {
+        "period": "2022-FY",
+        "value": 14996650000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 16074310000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 17559860000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 19501210000000.0
+      }
+    ],
+    "current_assets": [
+      {
+        "period": "2022-FY",
+        "value": 3470190000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 4252960000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 4701000000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 4992700000000.0
+      }
+    ],
+    "total_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 6106810000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 7785500000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 8301980000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 9404930000000.0
+      }
+    ],
+    "current_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 3086620000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 3957430000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 3973670000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 4537370000000.0
+      }
+    ],
+    "equity": [
+      {
+        "period": "2022-FY",
+        "value": 7794850000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 7158720000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 7934810000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 8432000000000.0
+      }
+    ]
+  }
+}

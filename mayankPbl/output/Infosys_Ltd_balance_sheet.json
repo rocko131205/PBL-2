@@ -1,0 +1,181 @@
+{
+  "entity": {
+    "entity_id": "Infosys Ltd",
+    "source": "Bloomberg",
+    "currency": "INR",
+    "source_files": [
+      "00001407.pdf"
+    ]
+  },
+  "time_series": {
+    "equity": [
+      {
+        "period": "2016-FY",
+        "value": 617790.0
+      },
+      {
+        "period": "2017-FY",
+        "value": 689820.0
+      },
+      {
+        "period": "2018-FY",
+        "value": 649240.0
+      },
+      {
+        "period": "2019-FY",
+        "value": 650060.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 658440.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 767820.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 757360.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 757950.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 884610.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 962030.0
+      }
+    ],
+    "retained_earnings": [
+      {
+        "period": "2016-FY",
+        "value": 576550.0
+      },
+      {
+        "period": "2017-FY",
+        "value": 650560.0
+      },
+      {
+        "period": "2018-FY",
+        "value": 612410.0
+      },
+      {
+        "period": "2019-FY",
+        "value": 588480.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 563090.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 653970.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 624230.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 600630.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 696740.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 800960.0
+      }
+    ],
+    "total_assets": [
+      {
+        "period": "2016-FY",
+        "value": 753890.0
+      },
+      {
+        "period": "2017-FY",
+        "value": 833550.0
+      },
+      {
+        "period": "2018-FY",
+        "value": 798900.0
+      },
+      {
+        "period": "2019-FY",
+        "value": 847380.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 927680.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 1083860.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1178850.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1258160.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1378140.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1489030.0
+      }
+    ],
+    "total_debt": [],
+    "total_liabilities": [
+      {
+        "period": "2016-FY",
+        "value": 753890.0
+      },
+      {
+        "period": "2017-FY",
+        "value": 833550.0
+      },
+      {
+        "period": "2018-FY",
+        "value": 798900.0
+      },
+      {
+        "period": "2019-FY",
+        "value": 847380.0
+      },
+      {
+        "period": "2020-FY",
+        "value": 927680.0
+      },
+      {
+        "period": "2021-FY",
+        "value": 1083860.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1178850.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1258160.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1378140.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1489030.0
+      }
+    ]
+  }
+}

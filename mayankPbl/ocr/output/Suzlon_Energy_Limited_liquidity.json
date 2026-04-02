@@ -1,0 +1,102 @@
+{
+  "entity": {
+    "entity_id": "Suzlon Energy Limited",
+    "source": "yfinance",
+    "currency": "INR",
+    "source_files": [
+      "SUZLON.NS"
+    ]
+  },
+  "time_series": {
+    "total_assets": [
+      {
+        "period": "2022-FY",
+        "value": 64748600000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 55233800000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 71790200000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 129595900000.0
+      }
+    ],
+    "current_assets": [
+      {
+        "period": "2022-FY",
+        "value": 50848900000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 41776500000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 52876900000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 92517100000.0
+      }
+    ],
+    "total_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 100366700000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 44242400000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 32587100000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 68538700000.0
+      }
+    ],
+    "current_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 42344000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 27007900000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 30088500000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 59146400000.0
+      }
+    ],
+    "equity": [
+      {
+        "period": "2022-FY",
+        "value": -35257300000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 10991400000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 39203100000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 61057200000.0
+      }
+    ]
+  }
+}

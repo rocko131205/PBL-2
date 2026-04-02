@@ -1,0 +1,246 @@
+{
+  "entity": {
+    "entity_id": "Yes Bank Limited",
+    "source": "yfinance",
+    "currency": "INR",
+    "source_files": [
+      "YESBANK.NS"
+    ]
+  },
+  "time_series": {
+    "revenue": [
+      {
+        "period": "2022-FY",
+        "value": 91172932000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 93697163000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 139782765000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 168299614000.0
+      }
+    ],
+    "net_income": [
+      {
+        "period": "2022-FY",
+        "value": 10640534000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 7358186000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 12852015000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 24464926000.0
+      }
+    ],
+    "interest_expense": [
+      {
+        "period": "2022-FY",
+        "value": 125284351000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 147997602000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 195272521000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 219983652000.0
+      }
+    ],
+    "pretax_income": [
+      {
+        "period": "2022-FY",
+        "value": 10640534000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 9813279000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 15376886000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 32239412000.0
+      }
+    ],
+    "income_tax": [
+      {
+        "period": "2022-FY",
+        "value": 3696360000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 2455100000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 2524870000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 7773410000.0
+      }
+    ],
+    "depreciation": [
+      {
+        "period": "2022-FY",
+        "value": 4033317000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 4334178000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 5455502000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 4933874000.0
+      }
+    ],
+    "total_assets": [
+      {
+        "period": "2022-FY",
+        "value": 3185777353000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 3552041341000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 4063615459000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 4241159328000.0
+      }
+    ],
+    "cash_and_equivalents": [
+      {
+        "period": "2022-FY",
+        "value": 639516141000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 502655747000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 634057001000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 655842846000.0
+      }
+    ],
+    "total_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 2848787667000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 3144859584000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 3642063603000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 3762802626000.0
+      }
+    ],
+    "long_term_debt": [
+      {
+        "period": "2022-FY",
+        "value": 652801826000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 710169839000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 788626097000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 708674469000.0
+      }
+    ],
+    "total_debt": [
+      {
+        "period": "2022-FY",
+        "value": 652801826000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 710169839000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 788626097000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 708674469000.0
+      }
+    ],
+    "equity": [
+      {
+        "period": "2022-FY",
+        "value": 336989686000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 407181757000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 421551856000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 478324161000.0
+      }
+    ],
+    "retained_earnings": [
+      {
+        "period": "2022-FY",
+        "value": -107567593000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": -100937570000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": -91126358000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": -75634967000.0
+      }
+    ]
+  }
+}

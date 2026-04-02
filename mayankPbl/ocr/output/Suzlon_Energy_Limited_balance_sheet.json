@@ -1,0 +1,192 @@
+{
+  "entity": {
+    "entity_id": "Suzlon Energy Limited",
+    "source": "yfinance",
+    "currency": "INR",
+    "source_files": [
+      "SUZLON.NS"
+    ]
+  },
+  "time_series": {
+    "total_assets": [
+      {
+        "period": "2022-FY",
+        "value": 64748600000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 55233800000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 71790200000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 129595900000.0
+      }
+    ],
+    "cash_and_equivalents": [
+      {
+        "period": "2022-FY",
+        "value": 4373800000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 3673100000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 2495700000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 9010700000.0
+      }
+    ],
+    "non_current_assets": [
+      {
+        "period": "2022-FY",
+        "value": 13899900000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 13457300000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 18913300000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 37078800000.0
+      }
+    ],
+    "total_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 100366700000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 44242400000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 32587100000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 68538700000.0
+      }
+    ],
+    "non_current_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 58022700000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 17234500000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 2498600000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 9392300000.0
+      }
+    ],
+    "long_term_debt": [
+      {
+        "period": "2022-FY",
+        "value": 55924400000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 15172700000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 498700000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 5461400000.0
+      }
+    ],
+    "short_term_debt": [
+      {
+        "period": "2022-FY",
+        "value": 7981200000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 3876100000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 600800000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1541400000.0
+      }
+    ],
+    "total_debt": [
+      {
+        "period": "2022-FY",
+        "value": 64652200000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 19379200000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1502400000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 7401200000.0
+      }
+    ],
+    "equity": [
+      {
+        "period": "2022-FY",
+        "value": -35257300000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 10991400000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 39203100000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 61057200000.0
+      }
+    ],
+    "retained_earnings": [
+      {
+        "period": "2022-FY",
+        "value": -218731800000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": -188763000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": -182127800000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": -161347100000.0
+      }
+    ]
+  }
+}

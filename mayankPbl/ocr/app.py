@@ -2,7 +2,7 @@
 
 Pages
 -----
-1. Upload Financial Statement  — multi-PDF upload, OCR, metric cards, run agents
+1. Upload Financial Statement  — 3 tabs: Bloomberg PDF / Fetch by Ticker / Private Company CSV
 2. Agent Workflow              — interactive pipeline diagram with hover tooltips
 3. Financial Analysis          — full agent output cards
 4. Basel III Alignment         — regulatory context panel
@@ -23,7 +23,9 @@ from agents import (
     revenue_agent,
     sentiment_agent,
 )
-from ocr.pdf_parser import parse_pdf_to_json
+from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
+from src.yfinance_ingestion import fetch_by_ticker
+from src.private_company_ingestion import load_private_company_data, get_template_csv
 from ui.dashboard_components import (
     agent_tooltip_html,
     load_css,
@@ -69,59 +71,242 @@ def _available_fields(payload: dict[str, Any]) -> set[str]:
     return {k for k, v in ts.items() if isinstance(v, list) and len(v) > 0}
 
 
-# ── Page 1 ────────────────────────────────────────────────────────────────────
+def _get_periods_from_payload(payload: dict[str, Any]) -> list[str]:
+    """Extract all unique periods present in any time_series field, sorted."""
+    import re
+    ts = payload.get("time_series") or {}
+    periods: set[str] = set()
+    for entries in ts.values():
+        if isinstance(entries, list):
+            for e in entries:
+                if isinstance(e, dict) and e.get("period"):
+                    periods.add(str(e["period"]))
+    def _sort_key(p: str):
+        m = re.match(r"^(\d{4})-(FY|Q[1-4])$", p)
+        if not m:
+            return (0, 0)
+        year = int(m.group(1))
+        tag  = m.group(2)
+        return (year, 5 if tag == "FY" else int(tag[1:]))
+    return sorted(periods, key=_sort_key)
 
-def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "") -> None:
-    render_section_header(
-        "Upload Bloomberg Financial Statement",
-        subtitle="Upload Income Statement + Balance Sheet PDFs for full analysis",
+
+def _patch_payload_field(
+    payload: dict[str, Any],
+    field: str,
+    period_values: dict[str, float],
+) -> dict[str, Any]:
+    """Add/overwrite a time_series field with user-supplied period→value pairs."""
+    import copy
+    p = copy.deepcopy(payload)
+    ts = p.setdefault("time_series", {})
+    existing = {e["period"]: e["value"] for e in ts.get(field, []) if isinstance(e, dict)}
+    existing.update(period_values)
+    ts[field] = sorted(
+        [{"period": k, "value": v} for k, v in existing.items()],
+        key=lambda x: x["period"],
     )
-    st.markdown(
-        '<p style="font-size:11px;color:#666;font-family:monospace;">'
-        "▸ Upload <b>both</b> the Income Statement PDF and the Balance Sheet PDF together "
-        "to enable all agents. A single IS PDF enables the Revenue Agent only.</p>",
-        unsafe_allow_html=True,
-    )
+    return p
 
-    uploaded_files = st.file_uploader(
-        "Drop Bloomberg PDF(s) here", type=["pdf"],
-        accept_multiple_files=True, label_visibility="collapsed",
-    )
 
-    if not uploaded_files:
-        st.markdown('<div style="color:#444;font-size:11px;margin-top:8px;">▸ Awaiting upload…</div>', unsafe_allow_html=True)
-        return
+def _render_missing_data_supplement(
+    payload: dict[str, Any],
+    agent_paths: dict,
+    written_path: Any,
+    source_label: str,
+) -> tuple[dict[str, Any], dict, Any]:
+    """Show an expander with inputs for any fields missing from the payload.
 
-    cache_key = tuple(sorted(f.name for f in uploaded_files))
-    cached = st.session_state.get("ocr_cache", {})
-
-    if cached.get("cache_key") != cache_key:
-        uploads = [(f.getvalue(), f.name) for f in uploaded_files]
-        with st.spinner(f"Running OCR parser on {len(uploads)} file(s)…"):
-            try:
-                payload, written_path, agent_paths = parse_pdf_to_json(uploads=uploads, output_dir="output")
-            except Exception as exc:
-                st.error(f"OCR failed: {exc}")
-                return
-        st.session_state["ocr_cache"] = {
-            "cache_key": cache_key, "payload": payload,
-            "written_path": written_path, "agent_paths": agent_paths,
-        }
-        st.session_state.pop("agent_outputs", None)
-        st.success(f"OCR complete — {len(uploads)} PDF(s) merged → `{written_path.name}`")
-    else:
-        payload = cached["payload"]; written_path = cached["written_path"]; agent_paths = cached["agent_paths"]
-        st.info(f"Cached OCR result: `{written_path.name}`")
-
-    render_section_header("Extracted Key Metrics", subtitle=f"Source: {written_path.name}")
-    render_metric_cards(payload)
-
-    with st.expander("Raw Data Preview", expanded=False):
-        st.dataframe(_preview_df(payload), use_container_width=True)
-
-    render_hr()
-
+    Returns the (possibly patched) payload, agent_paths, written_path.
+    If the user fills in missing values and clicks Apply, the in-memory payload
+    and all agent JSON files are updated immediately.
+    """
     avail = _available_fields(payload)
+
+    # Fields each agent strictly needs
+    _LIQUIDITY_REQUIRED  = {"current_assets", "current_liabilities", "total_assets", "total_liabilities", "equity"}
+    _BS_REQUIRED         = {"total_assets", "total_liabilities", "equity"}
+
+    missing_liq = sorted(_LIQUIDITY_REQUIRED - avail)
+    missing_bs  = sorted(_BS_REQUIRED - avail)
+    all_missing = sorted(set(missing_liq) | set(missing_bs))
+
+    if not all_missing:
+        return payload, agent_paths, written_path   # nothing to do
+
+    periods = _get_periods_from_payload(payload)
+    if not periods:
+        return payload, agent_paths, written_path
+
+    with st.expander(
+        f"⚠️  Insufficient Data — {len(all_missing)} field(s) missing "
+        f"({', '.join(all_missing)}). Click to supplement manually.",
+        expanded=True,
+    ):
+        st.markdown(
+            '<p style="font-size:11px;color:#aaa;font-family:monospace;">'
+            f"The fetched data is missing <b>{', '.join(all_missing)}</b>. "
+            "These are required to run the Liquidity and/or Balance Sheet agents. "
+            "Enter the values below (in the same unit as your other figures) "
+            "and click <b>Apply Supplemental Data</b>.</p>",
+            unsafe_allow_html=True,
+        )
+
+        # Build a grid: rows = periods, cols = missing fields
+        input_values: dict[str, dict[str, str]] = {f: {} for f in all_missing}
+
+        header_cols = st.columns([1] + [1] * len(all_missing))
+        header_cols[0].markdown("**Period**")
+        for i, field in enumerate(all_missing):
+            header_cols[i + 1].markdown(f"**{field}**")
+
+        for period in periods:
+            row_cols = st.columns([1] + [1] * len(all_missing))
+            row_cols[0].markdown(
+                f'<span style="font-size:11px;color:#FFB000;font-family:monospace;">{period}</span>',
+                unsafe_allow_html=True,
+            )
+            for i, field in enumerate(all_missing):
+                val = row_cols[i + 1].text_input(
+                    label=f"{field}_{period}",
+                    label_visibility="collapsed",
+                    placeholder="e.g. 150000",
+                    key=f"supp_{field}_{period}",
+                )
+                input_values[field][period] = val
+
+        if st.button("✅  Apply Supplemental Data", key="apply_supplement_btn"):
+            patched = payload
+            applied_any = False
+            errors: list[str] = []
+
+            for field, period_map in input_values.items():
+                parsed: dict[str, float] = {}
+                for period, raw in period_map.items():
+                    raw = raw.strip()
+                    if not raw:
+                        continue
+                    try:
+                        parsed[period] = float(raw.replace(",", ""))
+                        applied_any = True
+                    except ValueError:
+                        errors.append(f"{field} / {period}: '{raw}' is not a number")
+
+                if parsed:
+                    patched = _patch_payload_field(patched, field, parsed)
+
+            if errors:
+                for err in errors:
+                    st.warning(f"⚠ {err}")
+
+            if applied_any and not errors:
+                # Re-write all agent files with the patched payload
+                _, new_written, new_agent_paths = payload_to_agent_files(patched, output_dir="output")
+                # Update session state so the pipeline uses the new data
+                cached = st.session_state.get("ocr_cache", {})
+                cached["payload"]      = patched
+                cached["agent_paths"]  = new_agent_paths
+                cached["written_path"] = new_written
+                st.session_state["ocr_cache"] = cached
+                st.session_state.pop("agent_outputs", None)
+                st.success(
+                    f"✅ Supplemental data applied for {', '.join(all_missing)}. "
+                    "Now click ▶ RUN FULL ANALYSIS to re-run the pipeline."
+                )
+                st.rerun()
+            elif not applied_any:
+                st.warning("No values were entered. Fill in at least one field.")
+
+    # Always return whatever is currently in session_state (may have been updated above)
+    current = st.session_state.get("ocr_cache", {})
+    return (
+        current.get("payload", payload),
+        current.get("agent_paths", agent_paths),
+        current.get("written_path", written_path),
+    )
+
+
+# ── Shared agent runner (used by all 3 ingestion tabs) ────────────────────────
+
+def _run_agent_pipeline(
+    payload: dict[str, Any],
+    agent_paths: dict,
+    base_url: str,
+    model: str,
+    api_key: str,
+    news_api_key: str,
+) -> None:
+    """Run all 5 agents on pre-loaded data and store results in session_state."""
+    avail       = _available_fields(payload)
+    required_liq = {"current_assets", "current_liabilities", "total_assets", "total_liabilities", "equity"}
+    required_bs  = {"total_assets", "total_liabilities", "equity"}
+    missing_liq  = sorted(required_liq - avail)
+    missing_bs   = sorted(required_bs  - avail)
+
+    rev_path = agent_paths["revenue"]
+    bs_path  = agent_paths["balance_sheet"]
+    liq_path = agent_paths["liquidity"]
+    entity   = str(payload.get("entity", {}).get("entity_id") or "UNKNOWN")
+
+    with st.spinner("Revenue Agent…"):
+        rev_out = _safe_run("Revenue Agent",
+            lambda: revenue_agent.run(json_path=rev_path, base_url=base_url, model=model, api_key=api_key))
+
+    if missing_liq:
+        liq_out: dict = {"error": f"Liquidity Agent skipped — missing: {', '.join(missing_liq)}"}
+    else:
+        with st.spinner("Liquidity Agent…"):
+            liq_out = _safe_run("Liquidity Agent",
+                lambda: liquidity_agent.run(json_path=liq_path, base_url=base_url, model=model, api_key=api_key))
+
+    if missing_bs:
+        bs_out: dict = {"error": f"Balance Sheet Agent skipped — missing: {', '.join(missing_bs)}"}
+    else:
+        with st.spinner("Balance Sheet Agent…"):
+            _bs_path = bs_path
+            bs_out = _safe_run("Balance Sheet Agent",
+                lambda: balance_sheet_agent.run(json_path=_bs_path, base_url=base_url, model=model, api_key=api_key))
+
+    _news_key = news_api_key.strip() if news_api_key else ""
+    if not _news_key:
+        sentiment_out: dict = {"error": "Sentiment Agent skipped — add a NewsAPI key in the sidebar (newsapi.org)."}
+    else:
+        with st.spinner("Sentiment Agent…"):
+            _ent = entity
+            _nk  = _news_key
+            sentiment_out = _safe_run(
+                "Sentiment Agent",
+                lambda: sentiment_agent.run(
+                    company_name=_ent, news_api_key=_nk,
+                    base_url=base_url, model=model, api_key=api_key,
+                ),
+            )
+
+    _sentiment_ok = sentiment_out and not isinstance(sentiment_out.get("error"), str)
+    any_err = any(isinstance(x.get("error"), str) for x in [rev_out, liq_out, bs_out])
+    if any_err:
+        cross_out: dict = {"error": "Cross Reference Agent skipped — requires Revenue, Liquidity, and Balance Sheet agents to succeed."}
+    else:
+        with st.spinner("Cross Reference Agent…"):
+            _rev, _liq, _bs = rev_out, liq_out, bs_out
+            cross_out = _safe_run(
+                "Cross Reference Agent",
+                lambda: cross_reference_agent.run(
+                    entity=entity, revenue=_rev, liquidity=_liq, balance_sheet=_bs,
+                    sentiment=sentiment_out if _sentiment_ok else None,
+                    base_url=base_url, model=model, api_key=api_key,
+                ),
+            )
+
+    st.session_state["agent_outputs"] = {
+        "entity": entity, "revenue": rev_out, "liquidity": liq_out,
+        "balance_sheet": bs_out, "sentiment": sentiment_out, "cross_reference": cross_out,
+    }
+    st.success("Analysis complete — navigate to **Financial Analysis** to view results.")
+
+
+def _render_agent_status_badges(payload: dict[str, Any], news_api_key: str) -> None:
+    avail       = _available_fields(payload)
     required_liq = {"current_assets", "current_liabilities", "total_assets", "total_liabilities", "equity"}
     required_bs  = {"total_assets", "total_liabilities", "equity"}
     missing_liq  = sorted(required_liq - avail)
@@ -129,11 +314,11 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "")
 
     cols = st.columns(5)
     statuses = [
-        ("REVENUE",       "revenue" in avail,                      "#FFB000"),
-        ("LIQUIDITY",     not missing_liq,                          "#00BFFF"),
-        ("BALANCE SHEET", not missing_bs,                           "#FF6B35"),
+        ("REVENUE",       "revenue" in avail,                         "#FFB000"),
+        ("LIQUIDITY",     not missing_liq,                             "#00BFFF"),
+        ("BALANCE SHEET", not missing_bs,                              "#FF6B35"),
         ("SENTIMENT",     bool(news_api_key and news_api_key.strip()), "#CC88FF"),
-        ("CROSS REF",     not missing_liq and not missing_bs,       "#00FF88"),
+        ("CROSS REF",     not missing_liq and not missing_bs,          "#00FF88"),
     ]
     for col, (name, ready, colour) in zip(cols, statuses):
         c = colour if ready else "#444"
@@ -143,77 +328,188 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "")
             unsafe_allow_html=True,
         )
 
+
+# ── Page 1 ────────────────────────────────────────────────────────────────────
+
+def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "") -> None:
+    render_section_header(
+        "Financial Data Ingestion",
+        subtitle="Choose your data source: Bloomberg PDF · Listed Ticker · Private Company CSV",
+    )
+
+    tab_pdf, tab_ticker, tab_csv = st.tabs([
+        "📄  Bloomberg PDF",
+        "📈  Fetch by Ticker",
+        "🏢  Private Company (CSV / Excel)",
+    ])
+
+    # ── Tab 1: Bloomberg PDF ──────────────────────────────────────────────────
+    with tab_pdf:
+        st.markdown(
+            '<p style="font-size:11px;color:#666;font-family:monospace;">'
+            "▸ Upload <b>both</b> the Income Statement PDF and the Balance Sheet PDF together "
+            "to enable all agents. A single IS PDF enables the Revenue Agent only.</p>",
+            unsafe_allow_html=True,
+        )
+        uploaded_files = st.file_uploader(
+            "Drop Bloomberg PDF(s) here", type=["pdf"],
+            accept_multiple_files=True, label_visibility="collapsed", key="pdf_uploader",
+        )
+        if not uploaded_files:
+            st.markdown('<div style="color:#444;font-size:11px;margin-top:8px;">▸ Awaiting upload…</div>', unsafe_allow_html=True)
+        else:
+            cache_key = ("pdf",) + tuple(sorted(f.name for f in uploaded_files))
+            cached = st.session_state.get("ocr_cache", {})
+            if cached.get("cache_key") != cache_key:
+                uploads = [(f.getvalue(), f.name) for f in uploaded_files]
+                with st.spinner(f"Running OCR parser on {len(uploads)} file(s)…"):
+                    try:
+                        payload, written_path, agent_paths = parse_pdf_to_json(uploads=uploads, output_dir="output")
+                    except Exception as exc:
+                        st.error(f"OCR failed: {exc}")
+                        st.stop()
+                st.session_state["ocr_cache"] = {
+                    "cache_key": cache_key, "payload": payload,
+                    "written_path": written_path, "agent_paths": agent_paths,
+                    "source_label": f"{len(uploads)} Bloomberg PDF(s)",
+                }
+                st.session_state.pop("agent_outputs", None)
+                st.success(f"OCR complete — {len(uploads)} PDF(s) merged → `{written_path.name}`")
+            else:
+                st.info(f"Cached: `{cached['written_path'].name}`")
+
+    # ── Tab 2: Fetch by Ticker (yfinance) ────────────────────────────────────
+    with tab_ticker:
+        st.markdown(
+            '<p style="font-size:11px;color:#666;font-family:monospace;">'
+            "▸ Enter a Yahoo Finance ticker to automatically fetch annual financial statements. "
+            "Examples: <b>INFY.NS</b> (Infosys), <b>TCS.NS</b> (TCS), <b>AAPL</b> (Apple).</p>",
+            unsafe_allow_html=True,
+        )
+        col_t1, col_t2 = st.columns([3, 1])
+        ticker_input = col_t1.text_input(
+            "Ticker Symbol", placeholder="e.g. INFY.NS, TCS.NS, AAPL",
+            label_visibility="collapsed", key="ticker_input",
+        )
+        fetch_btn = col_t2.button("⬇  Fetch Data", use_container_width=True, key="fetch_ticker_btn")
+
+        if fetch_btn and ticker_input.strip():
+            ticker = ticker_input.strip().upper()
+            cache_key = ("ticker", ticker)
+            with st.spinner(f"Fetching financial data for {ticker} via yfinance…"):
+                try:
+                    payload = fetch_by_ticker(ticker)
+                    _, written_path, agent_paths = payload_to_agent_files(payload, output_dir="output")
+                except Exception as exc:
+                    st.error(f"Ticker fetch failed: {exc}")
+                    st.stop()
+            st.session_state["ocr_cache"] = {
+                "cache_key": cache_key, "payload": payload,
+                "written_path": written_path, "agent_paths": agent_paths,
+                "source_label": f"yfinance · {ticker}",
+            }
+            st.session_state.pop("agent_outputs", None)
+            entity_name = payload.get("entity", {}).get("entity_id", ticker)
+            st.success(f"Fetched: **{entity_name}** — {len(payload.get('time_series', {}))} fields available")
+        elif fetch_btn:
+            st.warning("Enter a ticker symbol first.")
+
+        # Show cached ticker info
+        cached = st.session_state.get("ocr_cache", {})
+        if cached.get("cache_key", (None,))[0] == "ticker":
+            st.info(f"Active dataset: {cached.get('source_label', '—')}")
+
+    # ── Tab 3: Private Company CSV / Excel ───────────────────────────────────
+    with tab_csv:
+        st.markdown(
+            '<p style="font-size:11px;color:#666;font-family:monospace;">'
+            "▸ For private or non-listed companies: upload a CSV or Excel file with financial data. "
+            "Columns: <b>period</b> (e.g. 2023-FY), revenue, total_assets, total_liabilities, "
+            "current_assets, current_liabilities, equity, …</p>",
+            unsafe_allow_html=True,
+        )
+
+        # Template download
+        st.download_button(
+            label="⬇  Download CSV Template",
+            data=get_template_csv(),
+            file_name="private_company_template.csv",
+            mime="text/csv",
+            key="csv_template_dl",
+        )
+
+        col_c1, col_c2 = st.columns([2, 1])
+        company_name_input = col_c1.text_input(
+            "Company Name", placeholder="e.g. Acme Pvt. Ltd.",
+            label_visibility="visible", key="csv_company_name",
+        )
+        currency_input = col_c2.selectbox(
+            "Currency", ["INR", "USD", "EUR", "GBP", "JPY", "SGD", "AED"],
+            key="csv_currency",
+        )
+        csv_file = st.file_uploader(
+            "Upload CSV or Excel file",
+            type=["csv", "xlsx", "xls"],
+            label_visibility="collapsed",
+            key="csv_uploader",
+        )
+
+        if csv_file and st.button("⬆  Load Private Company Data", key="load_csv_btn"):
+            if not company_name_input.strip():
+                st.warning("Please enter the company name before loading.")
+            else:
+                cache_key = ("csv", csv_file.name, company_name_input.strip())
+                with st.spinner("Parsing financial spreadsheet…"):
+                    try:
+                        payload = load_private_company_data(
+                            file_bytes=csv_file.getvalue(),
+                            filename=csv_file.name,
+                            company_name=company_name_input.strip(),
+                            currency=currency_input,
+                        )
+                        _, written_path, agent_paths = payload_to_agent_files(payload, output_dir="output")
+                    except Exception as exc:
+                        st.error(f"CSV ingestion failed: {exc}")
+                        st.stop()
+                st.session_state["ocr_cache"] = {
+                    "cache_key": cache_key, "payload": payload,
+                    "written_path": written_path, "agent_paths": agent_paths,
+                    "source_label": f"Private Upload · {csv_file.name}",
+                }
+                st.session_state.pop("agent_outputs", None)
+                fields_loaded = [k for k, v in payload.get("time_series", {}).items() if v]
+                st.success(f"Loaded **{company_name_input.strip()}** — {len(fields_loaded)} fields: {', '.join(fields_loaded[:6])}{'…' if len(fields_loaded) > 6 else ''}")
+
+    # ── Shared section below all tabs ─────────────────────────────────────────
+    cached = st.session_state.get("ocr_cache", {})
+    if not cached:
+        return
+
+    payload    = cached["payload"]
+    agent_paths = cached["agent_paths"]
+    written_path = cached["written_path"]
+    source_label = cached.get("source_label", written_path.name)
+
+    render_hr()
+    render_section_header("Extracted Key Metrics", subtitle=f"Source: {source_label}")
+    render_metric_cards(payload)
+
+    with st.expander("Raw Data Preview", expanded=False):
+        st.dataframe(_preview_df(payload), use_container_width=True)
+
+    render_hr()
+    _render_agent_status_badges(payload, news_api_key)
+
+    # ── Missing data supplement form (shown when yfinance lacks required fields) ──
+    payload, agent_paths, written_path = _render_missing_data_supplement(
+        payload, agent_paths, written_path, source_label
+    )
+
     render_hr()
     render_section_header("Run Agent Pipeline")
 
-    if st.button("▶  RUN FULL ANALYSIS", use_container_width=False):
-        rev_path = agent_paths["revenue"]
-        bs_path  = agent_paths["balance_sheet"]
-        liq_path = agent_paths["liquidity"]
-        entity = str(payload.get("entity", {}).get("entity_id") or "UNKNOWN")
-
-        with st.spinner("Revenue Agent…"):
-            rev_out = _safe_run("Revenue Agent",
-                lambda: revenue_agent.run(json_path=rev_path, base_url=base_url, model=model, api_key=api_key))
-
-        liq_out = ({"error": f"Liquidity Agent skipped — missing: {', '.join(missing_liq)}"} if missing_liq else
-            _safe_run("Liquidity Agent", lambda: liquidity_agent.run(json_path=liq_path, base_url=base_url, model=model, api_key=api_key)))
-        if not missing_liq:
-            with st.spinner("Liquidity Agent…"):
-                liq_out = _safe_run("Liquidity Agent",
-                    lambda: liquidity_agent.run(json_path=liq_path, base_url=base_url, model=model, api_key=api_key))
-
-        bs_out = ({"error": f"Balance Sheet Agent skipped — missing: {', '.join(missing_bs)}"} if missing_bs else None)
-        if not missing_bs:
-            with st.spinner("Balance Sheet Agent…"):
-                bs_out = _safe_run("Balance Sheet Agent",
-                    lambda: balance_sheet_agent.run(json_path=bs_path, base_url=base_url, model=model, api_key=api_key))
-
-        # Sentiment Agent — optional; skipped gracefully if no NewsAPI key provided
-        _news_key = news_api_key.strip() if news_api_key else ""
-        if not _news_key:
-            sentiment_out: dict = {"error": "Sentiment Agent skipped — add a NewsAPI key in the sidebar (newsapi.org)."}
-        else:
-            with st.spinner("Sentiment Agent…"):
-                _entity_for_sentiment = entity  # capture for lambda closure
-                _key_for_sentiment = _news_key
-                sentiment_out = _safe_run(
-                    "Sentiment Agent",
-                    lambda: sentiment_agent.run(
-                        company_name=_entity_for_sentiment,
-                        news_api_key=_key_for_sentiment,
-                        base_url=base_url,
-                        model=model,
-                        api_key=api_key,
-                    ),
-                )
-
-        # Pass sentiment to cross-reference only if it succeeded
-        _sentiment_ok = sentiment_out and not isinstance(sentiment_out.get("error"), str)
-        any_err = any(isinstance(x.get("error"), str) for x in [rev_out, liq_out, bs_out])
-        if any_err:
-            cross_out = {"error": "Cross Reference Agent skipped — requires Revenue, Liquidity, and Balance Sheet agents to succeed."}
-        else:
-            with st.spinner("Cross Reference Agent…"):
-                cross_out = _safe_run(
-                    "Cross Reference Agent",
-                    lambda: cross_reference_agent.run(
-                        entity=entity,
-                        revenue=rev_out,
-                        liquidity=liq_out,
-                        balance_sheet=bs_out,
-                        sentiment=sentiment_out if _sentiment_ok else None,
-                        base_url=base_url,
-                        model=model,
-                        api_key=api_key,
-                    ),
-                )
-
-        st.session_state["agent_outputs"] = {
-            "entity": entity, "revenue": rev_out, "liquidity": liq_out,
-            "balance_sheet": bs_out, "sentiment": sentiment_out, "cross_reference": cross_out,
-        }
-        st.success("Analysis complete — navigate to Financial Analysis to view results.")
+    if st.button("▶  RUN FULL ANALYSIS", use_container_width=False, key="run_pipeline_btn"):
+        _run_agent_pipeline(payload, agent_paths, base_url, model, api_key, news_api_key)
 
     outputs = st.session_state.get("agent_outputs")
     if outputs:
@@ -247,27 +543,39 @@ def page_workflow() -> None:
         </div>""", unsafe_allow_html=True)
 
     nodes = [
-        Node(id="pdf",   label="PDF\nInput",            color="#1A1A2E", shape="box",     size=20, font={"color":"#CCCCCC","size":12}, title="Bloomberg Financial Statement PDF(s)"),
-        Node(id="news",  label="News\nAPI",              color="#1A1A2E", shape="box",     size=20, font={"color":"#CC88FF","size":12}, title="NewsAPI — latest company news headlines (newsapi.org)"),
-        Node(id="ocr",   label="OCR\nParser",            color="#0D3B66", shape="box",     size=20, font={"color":"#00BFFF","size":12}, title="<b>OCR Parser</b><br>Extracts IS + BS data from PDFs<br>Writes 4 JSON files to output/"),
-        Node(id="rev",   label="Revenue\nAgent",         color="#3B2800", shape="ellipse", size=22, font={"color":"#FFB000","size":12}, title=agent_tooltip_html("Revenue Agent",       outputs.get("revenue"))),
-        Node(id="liq",   label="Liquidity\nAgent",       color="#003040", shape="ellipse", size=22, font={"color":"#00BFFF","size":12}, title=agent_tooltip_html("Liquidity Agent",     outputs.get("liquidity"))),
-        Node(id="bs",    label="Balance Sheet\nAgent",   color="#3B1800", shape="ellipse", size=22, font={"color":"#FF6B35","size":12}, title=agent_tooltip_html("Balance Sheet Agent", outputs.get("balance_sheet"))),
-        Node(id="sent",  label="Sentiment\nAgent",       color="#2A0040", shape="ellipse", size=22, font={"color":"#CC88FF","size":12}, title=agent_tooltip_html("Sentiment Agent",     outputs.get("sentiment"))),
-        Node(id="cross", label="Cross\nReference\nAgent",color="#002010", shape="box",     size=24, font={"color":"#00FF88","size":12}, title=agent_tooltip_html("Cross Reference Agent",outputs.get("cross_reference"))),
-        Node(id="out",   label="Explainable\nOutput",    color="#1A1A2E", shape="box",     size=20, font={"color":"#E6E6E6","size":12}, title="Final explainable financial analysis report"),
+        # ── Data sources (3 paths) ──────────────────────────────────────────
+        Node(id="pdf",    label="Bloomberg\nPDF",          color="#1A1A2E", shape="box",     size=20, font={"color":"#CCCCCC","size":12}, title="Bloomberg Financial Statement PDF(s) — upload via Tab 1"),
+        Node(id="ticker", label="Ticker\n(yfinance)",       color="#1A1A2E", shape="box",     size=20, font={"color":"#00BFFF","size":12}, title="Listed company ticker (e.g. INFY.NS) — auto-fetches annual financials via yfinance"),
+        Node(id="csv",    label="Private Co.\nCSV/Excel",   color="#1A1A2E", shape="box",     size=20, font={"color":"#FFB000","size":12}, title="Private/non-listed company — upload a structured CSV or Excel file"),
+        Node(id="news",   label="News\nAPI",                color="#1A1A2E", shape="box",     size=20, font={"color":"#CC88FF","size":12}, title="NewsAPI — latest company news headlines (newsapi.org)"),
+        # ── Ingestion / Schema converter ────────────────────────────────────
+        Node(id="ingest", label="Ingestion\nLayer",         color="#0D3B66", shape="box",     size=22, font={"color":"#00BFFF","size":12}, title="<b>Ingestion Layer</b><br>PDF → OCR parser · Ticker → yfinance · CSV → structured parser<br>All converge to same internal JSON schema → output/"),
+        # ── Deterministic agents ─────────────────────────────────────────────
+        Node(id="rev",    label="Revenue\nAgent",           color="#3B2800", shape="ellipse", size=22, font={"color":"#FFB000","size":12}, title=agent_tooltip_html("Revenue Agent",       outputs.get("revenue"))),
+        Node(id="liq",    label="Liquidity\nAgent",         color="#003040", shape="ellipse", size=22, font={"color":"#00BFFF","size":12}, title=agent_tooltip_html("Liquidity Agent",     outputs.get("liquidity"))),
+        Node(id="bs",     label="Balance Sheet\nAgent",     color="#3B1800", shape="ellipse", size=22, font={"color":"#FF6B35","size":12}, title=agent_tooltip_html("Balance Sheet Agent", outputs.get("balance_sheet"))),
+        Node(id="sent",   label="Sentiment\nAgent",         color="#2A0040", shape="ellipse", size=22, font={"color":"#CC88FF","size":12}, title=agent_tooltip_html("Sentiment Agent",     outputs.get("sentiment"))),
+        # ── LLM synthesis ────────────────────────────────────────────────────
+        Node(id="cross",  label="Cross\nReference\nAgent",  color="#002010", shape="box",     size=24, font={"color":"#00FF88","size":12}, title=agent_tooltip_html("Cross Reference Agent",outputs.get("cross_reference"))),
+        Node(id="out",    label="Explainable\nOutput",       color="#1A1A2E", shape="box",     size=20, font={"color":"#E6E6E6","size":12}, title="Final explainable financial analysis report"),
     ]
     edges = [
-        Edge(source="pdf",   target="ocr",   color="#333344", width=2),
-        Edge(source="news",  target="sent",  color="#CC88FF", width=2),
-        Edge(source="ocr",   target="rev",   color="#FFB000", width=1),
-        Edge(source="ocr",   target="liq",   color="#00BFFF", width=1),
-        Edge(source="ocr",   target="bs",    color="#FF6B35", width=1),
-        Edge(source="rev",   target="cross", color="#FFB000", width=1, dashes=True),
-        Edge(source="liq",   target="cross", color="#00BFFF", width=1, dashes=True),
-        Edge(source="bs",    target="cross", color="#FF6B35", width=1, dashes=True),
-        Edge(source="sent",  target="cross", color="#CC88FF", width=1, dashes=True),
-        Edge(source="cross", target="out",   color="#00FF88", width=2),
+        # 3 sources → ingestion layer
+        Edge(source="pdf",    target="ingest", color="#555566", width=2),
+        Edge(source="ticker", target="ingest", color="#00BFFF", width=2),
+        Edge(source="csv",    target="ingest", color="#FFB000", width=2),
+        # news → sentiment
+        Edge(source="news",   target="sent",   color="#CC88FF", width=2),
+        # ingestion layer → deterministic agents
+        Edge(source="ingest", target="rev",    color="#FFB000", width=1),
+        Edge(source="ingest", target="liq",    color="#00BFFF", width=1),
+        Edge(source="ingest", target="bs",     color="#FF6B35", width=1),
+        # agents → cross-reference (LLM)
+        Edge(source="rev",    target="cross",  color="#FFB000", width=1, dashes=True),
+        Edge(source="liq",    target="cross",  color="#00BFFF", width=1, dashes=True),
+        Edge(source="bs",     target="cross",  color="#FF6B35", width=1, dashes=True),
+        Edge(source="sent",   target="cross",  color="#CC88FF", width=1, dashes=True),
+        Edge(source="cross",  target="out",    color="#00FF88", width=2),
     ]
     config = Config(width="100%", height=520, directed=True, physics=False, hierarchical=True,
                     hierarchical_sort_method="directed", nodeHighlightBehavior=True, highlightColor="#FFB000", collapsible=False)

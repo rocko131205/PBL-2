@@ -1,0 +1,170 @@
+{
+  "entity": {
+    "entity_id": "Apple Inc.",
+    "source": "yfinance",
+    "currency": "USD",
+    "source_files": [
+      "AAPL"
+    ]
+  },
+  "time_series": {
+    "revenue": [
+      {
+        "period": "2022-FY",
+        "value": 394328000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 383285000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 391035000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 416161000000.0
+      }
+    ],
+    "gross_profit": [
+      {
+        "period": "2022-FY",
+        "value": 170782000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 169148000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 180683000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 195201000000.0
+      }
+    ],
+    "operating_income": [
+      {
+        "period": "2022-FY",
+        "value": 119437000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 114301000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 123216000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 133050000000.0
+      }
+    ],
+    "net_income": [
+      {
+        "period": "2022-FY",
+        "value": 99803000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 96995000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 93736000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 112010000000.0
+      }
+    ],
+    "interest_expense": [
+      {
+        "period": "2021-FY",
+        "value": 2645000000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 2931000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 3933000000.0
+      }
+    ],
+    "pretax_income": [
+      {
+        "period": "2022-FY",
+        "value": 119103000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 113736000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 123485000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 132729000000.0
+      }
+    ],
+    "income_tax": [
+      {
+        "period": "2022-FY",
+        "value": 19300000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 16741000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 29749000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 20719000000.0
+      }
+    ],
+    "depreciation": [
+      {
+        "period": "2022-FY",
+        "value": 11104000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 11519000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 11445000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 11698000000.0
+      }
+    ],
+    "cost_of_revenue": [
+      {
+        "period": "2022-FY",
+        "value": 223546000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 214137000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 210352000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 220960000000.0
+      }
+    ]
+  }
+}

@@ -125,3 +125,51 @@ def parse_pdf_to_json(
         }
 
         return payload, full_path, agent_paths
+
+
+# ---------------------------------------------------------------------------
+# Generic helper for in-memory payloads (yfinance / private CSV ingestion)
+# ---------------------------------------------------------------------------
+
+def payload_to_agent_files(
+    payload: dict[str, Any],
+    output_dir: str | Path = "output",
+) -> tuple[dict[str, Any], Path, dict[str, Path]]:
+    """Write an arbitrary in-memory payload to the agent-specific JSON files.
+
+    Use this for data sources that produce a payload dict directly (e.g.
+    ``src.yfinance_ingestion.fetch_by_ticker`` or
+    ``src.private_company_ingestion.load_private_company_data``) so they can
+    feed the same downstream agent pipeline as Bloomberg PDF uploads.
+
+    Args:
+        payload:    A dict with ``entity`` and ``time_series`` keys — same
+                    schema produced by :func:`parse_pdf_to_json`.
+        output_dir: Directory where JSON files should be written.
+
+    Returns:
+        ``(payload, full_json_path, agent_paths)`` — identical shape to
+        the return value of :func:`parse_pdf_to_json`.
+    """
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    entity_id = str(payload.get("entity", {}).get("entity_id") or "UNKNOWN")
+    safe = "".join(c if c.isalnum() or c in (" ", "_", "-") else "_" for c in entity_id)
+    safe = safe.strip().replace(" ", "_") or "UNKNOWN"
+
+    def _write(name: str, data: dict[str, Any]) -> Path:
+        p = out_dir / name
+        p.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        return p
+
+    full_path = _write(f"{safe}.json", payload)
+
+    agent_paths: dict[str, Path] = {
+        "revenue":       _write(f"{safe}_revenue.json",       _sub_payload(payload, _REVENUE_FIELDS)),
+        "balance_sheet": _write(f"{safe}_balance_sheet.json", _sub_payload(payload, _BALANCE_SHEET_FIELDS)),
+        "liquidity":     _write(f"{safe}_liquidity.json",     _sub_payload(payload, _LIQUIDITY_FIELDS)),
+    }
+
+    return payload, full_path, agent_paths
+

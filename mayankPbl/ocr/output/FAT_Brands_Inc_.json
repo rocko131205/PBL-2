@@ -1,0 +1,390 @@
+{
+  "entity": {
+    "entity_id": "FAT Brands Inc.",
+    "source": "yfinance",
+    "currency": "USD",
+    "source_files": [
+      "FAT"
+    ]
+  },
+  "time_series": {
+    "revenue": [
+      {
+        "period": "2021-FY",
+        "value": 118881000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 407224000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 480457000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 592652000.0
+      }
+    ],
+    "gross_profit": [
+      {
+        "period": "2021-FY",
+        "value": 56666000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 185597000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 149951000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 150421000.0
+      }
+    ],
+    "operating_income": [
+      {
+        "period": "2021-FY",
+        "value": 6417000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 657000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 25703000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": -19671000.0
+      }
+    ],
+    "net_income": [
+      {
+        "period": "2021-FY",
+        "value": -31583000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": -126188000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": -90110000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": -189847000.0
+      }
+    ],
+    "interest_expense": [
+      {
+        "period": "2021-FY",
+        "value": 29057000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 94849000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 117531000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 138250000.0
+      }
+    ],
+    "pretax_income": [
+      {
+        "period": "2021-FY",
+        "value": -35120000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": -107378000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": -96365000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": -192600000.0
+      }
+    ],
+    "income_tax": [
+      {
+        "period": "2021-FY",
+        "value": -3537000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 18810000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": -6255000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": -2753000.0
+      }
+    ],
+    "depreciation": [
+      {
+        "period": "2021-FY",
+        "value": 8474000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 27015000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 31131000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 41528000.0
+      }
+    ],
+    "cost_of_revenue": [
+      {
+        "period": "2021-FY",
+        "value": 62215000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 221627000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 330506000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 442231000.0
+      }
+    ],
+    "total_assets": [
+      {
+        "period": "2021-FY",
+        "value": 1270032000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1213303000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1388238000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1289178000.0
+      }
+    ],
+    "current_assets": [
+      {
+        "period": "2021-FY",
+        "value": 119039000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 95701000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 121009000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 88034000.0
+      }
+    ],
+    "cash_and_equivalents": [
+      {
+        "period": "2021-FY",
+        "value": 56656000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 28668000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 37044000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 23383000.0
+      }
+    ],
+    "non_current_assets": [
+      {
+        "period": "2021-FY",
+        "value": 1150992000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1117637000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1267194000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1201128000.0
+      }
+    ],
+    "total_liabilities": [
+      {
+        "period": "2021-FY",
+        "value": 1291687000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1372481000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1644101000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1744890000.0
+      }
+    ],
+    "current_liabilities": [
+      {
+        "period": "2021-FY",
+        "value": 198488000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 267020000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 276602000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 298316000.0
+      }
+    ],
+    "non_current_liabilities": [
+      {
+        "period": "2021-FY",
+        "value": 1093199000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1105461000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1367499000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1446574000.0
+      }
+    ],
+    "long_term_debt": [
+      {
+        "period": "2021-FY",
+        "value": 904265000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 958630000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1110308000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1208997000.0
+      }
+    ],
+    "short_term_debt": [
+      {
+        "period": "2021-FY",
+        "value": 631000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 49611000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 42611000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 49241000.0
+      }
+    ],
+    "total_debt": [
+      {
+        "period": "2021-FY",
+        "value": 1012157000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": 1118676000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1381917000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1474599000.0
+      }
+    ],
+    "equity": [
+      {
+        "period": "2021-FY",
+        "value": -21655000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": -159178000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": -255863000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": -455712000.0
+      }
+    ],
+    "retained_earnings": [
+      {
+        "period": "2021-FY",
+        "value": -52479000.0
+      },
+      {
+        "period": "2022-FY",
+        "value": -178667000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": -268777000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": -458624000.0
+      }
+    ]
+  }
+}

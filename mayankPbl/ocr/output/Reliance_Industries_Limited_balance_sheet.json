@@ -1,0 +1,192 @@
+{
+  "entity": {
+    "entity_id": "Reliance Industries Limited",
+    "source": "yfinance",
+    "currency": "INR",
+    "source_files": [
+      "RELIANCE.NS"
+    ]
+  },
+  "time_series": {
+    "total_assets": [
+      {
+        "period": "2022-FY",
+        "value": 14996650000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 16074310000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 17559860000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 19501210000000.0
+      }
+    ],
+    "cash_and_equivalents": [
+      {
+        "period": "2022-FY",
+        "value": 335090000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 341560000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 935400000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1006450000000.0
+      }
+    ],
+    "non_current_assets": [
+      {
+        "period": "2022-FY",
+        "value": 11526460000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 11821350000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 12858860000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 14508510000000.0
+      }
+    ],
+    "total_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 6106810000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 7785500000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 8301980000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 9404930000000.0
+      }
+    ],
+    "non_current_liabilities": [
+      {
+        "period": "2022-FY",
+        "value": 3020190000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 3828070000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 4328310000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 4867580000000.0
+      }
+    ],
+    "long_term_debt": [
+      {
+        "period": "2022-FY",
+        "value": 1876990000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1831760000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 2227120000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 2368990000000.0
+      }
+    ],
+    "short_term_debt": [
+      {
+        "period": "2022-FY",
+        "value": 786060000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 1307900000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 1019100000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 1106310000000.0
+      }
+    ],
+    "total_debt": [
+      {
+        "period": "2022-FY",
+        "value": 2819740000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 3343920000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 3461420000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 3695750000000.0
+      }
+    ],
+    "equity": [
+      {
+        "period": "2022-FY",
+        "value": 7794850000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 7158720000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 7934810000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 8432000000000.0
+      }
+    ],
+    "retained_earnings": [
+      {
+        "period": "2022-FY",
+        "value": 2479510000000.0
+      },
+      {
+        "period": "2023-FY",
+        "value": 2957390000000.0
+      },
+      {
+        "period": "2024-FY",
+        "value": 3397870000000.0
+      },
+      {
+        "period": "2025-FY",
+        "value": 3919430000000.0
+      }
+    ]
+  }
+}
