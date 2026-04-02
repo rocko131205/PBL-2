@@ -26,8 +26,11 @@ from agents import (
 from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
 from src.yfinance_ingestion import fetch_by_ticker
 from src.private_company_ingestion import load_private_company_data, get_template_csv
+from src.supplemental_fetchers import auto_fetch_missing_fields
+from src.data_verifier import run_verification, CredibilityReport, STATUS_PASS, STATUS_WARN, STATUS_FAIL, STATUS_SKIP
 from ui.dashboard_components import (
     agent_tooltip_html,
+    inject_theme_vars,
     load_css,
     render_agent_card,
     render_cross_ref_card,
@@ -37,10 +40,12 @@ from ui.dashboard_components import (
     render_top_bar,
 )
 
-_DEFAULT_BASE_URL    = "http://127.0.0.1:1234/v1"
-_DEFAULT_MODEL       = "qwen2.5-coder-1.5b-instruct-mlx"
-_DEFAULT_API_KEY     = "local"
+_DEFAULT_BASE_URL     = "http://127.0.0.1:1234/v1"
+_DEFAULT_MODEL        = "qwen2.5-coder-1.5b-instruct-mlx"
+_DEFAULT_API_KEY      = "local"
 _DEFAULT_NEWS_API_KEY = ""
+_DEFAULT_FMP_KEY      = ""
+_DEFAULT_AV_KEY       = ""
 
 
 def _safe_run(name: str, fn) -> dict[str, Any]:
@@ -69,6 +74,57 @@ def _preview_df(payload: dict[str, Any]) -> pd.DataFrame:
 def _available_fields(payload: dict[str, Any]) -> set[str]:
     ts = payload.get("time_series") or {}
     return {k for k, v in ts.items() if isinstance(v, list) and len(v) > 0}
+
+
+def _render_credibility_panel(
+    report: CredibilityReport,
+) -> None:
+    """Render the Data Credibility Score card."""
+    score = report.score
+    confidence = report.confidence
+    colour = report.confidence_colour
+
+    conf_label = {"HIGH": "HIGH CONFIDENCE", "MEDIUM": "MEDIUM CONFIDENCE", "LOW": "LOW CONFIDENCE"}
+    check_label = {
+        STATUS_PASS: ("PASS", "#3AB87A"),
+        STATUS_WARN: ("WARN", "#D4963A"),
+        STATUS_FAIL: ("FAIL", "#C94A3A"),
+        STATUS_SKIP: ("SKIP", "#5A5A72"),
+    }
+
+    # Score card
+    st.markdown(
+        f'<div style="background:var(--c-bg2,#10121A);border:1px solid {colour}22;'
+        f'border-left:3px solid {colour};border-radius:2px;padding:12px 16px;margin:6px 0;">'
+        f'<div style="display:flex;align-items:center;gap:20px;">'
+        f'<div style="font-size:36px;font-weight:700;color:{colour};font-family:monospace;line-height:1;">{score}</div>'
+        f'<div>'
+        f'<div style="font-size:8px;color:var(--c-text3,#5A5A72);letter-spacing:0.18em;text-transform:uppercase;margin-bottom:3px;">CREDIBILITY SCORE / 100</div>'
+        f'<div style="font-size:12px;color:{colour};font-weight:700;letter-spacing:0.12em;">{conf_label[confidence]}</div>'
+        f'<div style="font-size:9px;color:var(--c-text3,#5A5A72);margin-top:3px;letter-spacing:0.06em;">'
+        f'SOURCE: {report.source.replace("_"," ").upper()} &nbsp;&middot;&nbsp; ENTITY: {report.entity}'
+        f'</div></div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("View detailed credibility checks", expanded=False):
+        for check in report.checks:
+            badge_text, badge_col = check_label.get(check.status, ("SKIP", "#5A5A72"))
+            st.markdown(
+                f'<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--c-border,#1E2030);">'
+                f'<span style="font-size:9px;font-weight:700;color:{badge_col};background:{badge_col}18;'
+                f'padding:1px 5px;border-radius:2px;letter-spacing:0.1em;margin-top:1px;white-space:nowrap;">{badge_text}</span>'
+                f'<div>'
+                f'<span style="font-size:11px;color:var(--c-text,#D8D8E0);font-weight:600;">{check.name}</span><br>'
+                f'<span style="font-size:10px;color:var(--c-text3,#5A5A72);font-family:monospace;">{check.detail}</span>'
+                f'</div></div>',
+                unsafe_allow_html=True,
+            )
+        st.markdown(
+            '<p style="font-size:9px;color:var(--c-text3,#5A5A72);margin-top:6px;">'
+            'Score = weighted average of non-skipped checks.</p>',
+            unsafe_allow_html=True,
+        )
 
 
 def _get_periods_from_payload(payload: dict[str, Any]) -> list[str]:
@@ -114,45 +170,125 @@ def _render_missing_data_supplement(
     agent_paths: dict,
     written_path: Any,
     source_label: str,
+    fmp_api_key: str = "",
+    av_api_key: str = "",
 ) -> tuple[dict[str, Any], dict, Any]:
-    """Show an expander with inputs for any fields missing from the payload.
-
-    Returns the (possibly patched) payload, agent_paths, written_path.
-    If the user fills in missing values and clicks Apply, the in-memory payload
-    and all agent JSON files are updated immediately.
-    """
+    """Show an expander with auto-fetch + manual entry for missing fields."""
     avail = _available_fields(payload)
 
-    # Fields each agent strictly needs
-    _LIQUIDITY_REQUIRED  = {"current_assets", "current_liabilities", "total_assets", "total_liabilities", "equity"}
-    _BS_REQUIRED         = {"total_assets", "total_liabilities", "equity"}
+    _LIQUIDITY_REQUIRED = {"current_assets", "current_liabilities", "total_assets", "total_liabilities", "equity"}
+    _BS_REQUIRED        = {"total_assets", "total_liabilities", "equity"}
 
     missing_liq = sorted(_LIQUIDITY_REQUIRED - avail)
     missing_bs  = sorted(_BS_REQUIRED - avail)
     all_missing = sorted(set(missing_liq) | set(missing_bs))
 
     if not all_missing:
-        return payload, agent_paths, written_path   # nothing to do
+        return payload, agent_paths, written_path
 
     periods = _get_periods_from_payload(payload)
     if not periods:
         return payload, agent_paths, written_path
 
+    # Pre-filled values from auto-fetch (stored in session_state)
+    prefilled: dict[str, dict[str, float]] = st.session_state.get("supp_prefilled", {})
+
+    # Detect ticker for auto-fetch (only relevant for ticker source)
+    cached_src = st.session_state.get("ocr_cache", {}).get("cache_key", (None,))
+    ticker_for_fetch: str | None = None
+    if isinstance(cached_src, tuple) and len(cached_src) >= 2 and cached_src[0] == "ticker":
+        ticker_for_fetch = cached_src[1]
+
     with st.expander(
-        f"⚠️  Insufficient Data — {len(all_missing)} field(s) missing "
-        f"({', '.join(all_missing)}). Click to supplement manually.",
+        f"⚠️  Insufficient Data — {len(all_missing)} field(s) missing: "
+        f"{', '.join(all_missing)}",
         expanded=True,
     ):
         st.markdown(
             '<p style="font-size:11px;color:#aaa;font-family:monospace;">'
-            f"The fetched data is missing <b>{', '.join(all_missing)}</b>. "
-            "These are required to run the Liquidity and/or Balance Sheet agents. "
-            "Enter the values below (in the same unit as your other figures) "
-            "and click <b>Apply Supplemental Data</b>.</p>",
+            f"Missing: <b>{', '.join(all_missing)}</b>. "
+            "These fields are required by the Liquidity / Balance Sheet agents. "
+            "Auto-fetch from a financial data API, or enter values manually below.</p>",
             unsafe_allow_html=True,
         )
 
-        # Build a grid: rows = periods, cols = missing fields
+        # ── Section A: Auto-fetch buttons ────────────────────────────────────
+        if ticker_for_fetch:
+            st.markdown("**Step 1 — Auto-fetch missing data** *(requires API key in sidebar)*")
+            col_fmp, col_av, col_status = st.columns([1, 1, 2])
+
+            has_fmp = bool(fmp_api_key and fmp_api_key.strip())
+            has_av  = bool(av_api_key  and av_api_key.strip())
+
+            if col_fmp.button(
+                "Fetch via FMP",
+                key="autofetch_fmp_btn",
+                disabled=not has_fmp,
+                help="Add FMP API key in sidebar first (financialmodelingprep.com)" if not has_fmp else "Fetch from Financial Modeling Prep",
+            ):
+                with st.spinner("Fetching from FMP…"):
+                    resolved, resolved_fields, errors = auto_fetch_missing_fields(
+                        ticker=ticker_for_fetch,
+                        missing_fields=set(all_missing),
+                        fmp_api_key=fmp_api_key,
+                        av_api_key=None,
+                    )
+                if resolved_fields:
+                    st.session_state["supp_prefilled"] = {
+                        field: {e["period"]: e["value"] for e in series}
+                        for field, series in resolved.items()
+                    }
+                    prefilled = st.session_state["supp_prefilled"]
+                    st.success(f"FMP resolved: {', '.join(resolved_fields)}")
+                for err in errors:
+                    st.warning(f"{err}")
+                if not resolved_fields:
+                    st.error("FMP could not resolve any missing fields. Try Alpha Vantage or enter manually.")
+
+            if col_av.button(
+                "Fetch via Alpha Vantage",
+                key="autofetch_av_btn",
+                disabled=not has_av,
+                help="Add AV API key in sidebar first (alphavantage.co)" if not has_av else "Fetch from Alpha Vantage",
+            ):
+                with st.spinner("Fetching from Alpha Vantage…"):
+                    resolved, resolved_fields, errors = auto_fetch_missing_fields(
+                        ticker=ticker_for_fetch,
+                        missing_fields=set(all_missing),
+                        fmp_api_key=None,
+                        av_api_key=av_api_key,
+                    )
+                if resolved_fields:
+                    existing = st.session_state.get("supp_prefilled", {})
+                    for field, series in resolved.items():
+                        existing[field] = {e["period"]: e["value"] for e in series}
+                    st.session_state["supp_prefilled"] = existing
+                    prefilled = st.session_state["supp_prefilled"]
+                    st.success(f"Alpha Vantage resolved: {', '.join(resolved_fields)}")
+                for err in errors:
+                    st.warning(f"{err}")
+                if not resolved_fields:
+                    st.error("Alpha Vantage could not resolve any missing fields. Enter manually below.")
+
+            if not has_fmp and not has_av:
+                col_status.markdown(
+                    '<span style="font-size:10px;color:var(--c-text3,#5A5A72);">'
+                    "Add FMP or Alpha Vantage key in the sidebar to enable auto-fetch."
+                    "</span>",
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown("---")
+
+        # Section B: Manual entry
+        st.markdown("**Step 2 — Review / enter values manually**")
+        st.markdown(
+            '<p style="font-size:10px;color:var(--c-text3,#5A5A72);font-family:monospace;">'
+            "Auto-fetched values are pre-filled below. Edit or complete any blanks. "
+            "Use the same unit as your other figures (e.g. millions).</p>",
+            unsafe_allow_html=True,
+        )
+
         input_values: dict[str, dict[str, str]] = {f: {} for f in all_missing}
 
         header_cols = st.columns([1] + [1] * len(all_missing))
@@ -167,18 +303,23 @@ def _render_missing_data_supplement(
                 unsafe_allow_html=True,
             )
             for i, field in enumerate(all_missing):
+                # Pre-populate with auto-fetched value if available
+                pre_val = prefilled.get(field, {}).get(period)
+                default  = str(int(pre_val)) if pre_val is not None else ""
                 val = row_cols[i + 1].text_input(
                     label=f"{field}_{period}",
                     label_visibility="collapsed",
                     placeholder="e.g. 150000",
+                    value=default,
                     key=f"supp_{field}_{period}",
                 )
                 input_values[field][period] = val
 
-        if st.button("✅  Apply Supplemental Data", key="apply_supplement_btn"):
+        # ── Section C: Apply button ───────────────────────────────────────────
+        if st.button("Apply Supplemental Data", key="apply_supplement_btn"):
             patched = payload
             applied_any = False
-            errors: list[str] = []
+            errors_apply: list[str] = []
 
             for field, period_map in input_values.items():
                 parsed: dict[str, float] = {}
@@ -190,34 +331,30 @@ def _render_missing_data_supplement(
                         parsed[period] = float(raw.replace(",", ""))
                         applied_any = True
                     except ValueError:
-                        errors.append(f"{field} / {period}: '{raw}' is not a number")
-
+                        errors_apply.append(f"{field} / {period}: '{raw}' is not a number")
                 if parsed:
                     patched = _patch_payload_field(patched, field, parsed)
 
-            if errors:
-                for err in errors:
-                    st.warning(f"⚠ {err}")
+            for err in errors_apply:
+                st.warning(f"⚠ {err}")
 
-            if applied_any and not errors:
-                # Re-write all agent files with the patched payload
+            if applied_any and not errors_apply:
                 _, new_written, new_agent_paths = payload_to_agent_files(patched, output_dir="output")
-                # Update session state so the pipeline uses the new data
-                cached = st.session_state.get("ocr_cache", {})
-                cached["payload"]      = patched
-                cached["agent_paths"]  = new_agent_paths
-                cached["written_path"] = new_written
-                st.session_state["ocr_cache"] = cached
+                c = st.session_state.get("ocr_cache", {})
+                c["payload"]      = patched
+                c["agent_paths"]  = new_agent_paths
+                c["written_path"] = new_written
+                st.session_state["ocr_cache"] = c
                 st.session_state.pop("agent_outputs", None)
+                st.session_state.pop("supp_prefilled", None)   # clear prefill cache
                 st.success(
-                    f"✅ Supplemental data applied for {', '.join(all_missing)}. "
-                    "Now click ▶ RUN FULL ANALYSIS to re-run the pipeline."
+                    f"✅ Supplemental data applied for: {', '.join(all_missing)}. "
+                    "Now click ▶ RUN FULL ANALYSIS."
                 )
                 st.rerun()
             elif not applied_any:
                 st.warning("No values were entered. Fill in at least one field.")
 
-    # Always return whatever is currently in session_state (may have been updated above)
     current = st.session_state.get("ocr_cache", {})
     return (
         current.get("payload", payload),
@@ -331,16 +468,17 @@ def _render_agent_status_badges(payload: dict[str, Any], news_api_key: str) -> N
 
 # ── Page 1 ────────────────────────────────────────────────────────────────────
 
-def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "") -> None:
+def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
+                fmp_api_key: str = "", av_api_key: str = "") -> None:
     render_section_header(
         "Financial Data Ingestion",
         subtitle="Choose your data source: Bloomberg PDF · Listed Ticker · Private Company CSV",
     )
 
     tab_pdf, tab_ticker, tab_csv = st.tabs([
-        "📄  Bloomberg PDF",
-        "📈  Fetch by Ticker",
-        "🏢  Private Company (CSV / Excel)",
+        "Bloomberg PDF",
+        "Fetch by Ticker",
+        "Private Company (CSV / Excel)",
     ])
 
     # ── Tab 1: Bloomberg PDF ──────────────────────────────────────────────────
@@ -497,19 +635,103 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "")
     with st.expander("Raw Data Preview", expanded=False):
         st.dataframe(_preview_df(payload), use_container_width=True)
 
+    # ── Data Credibility Panel ────────────────────────────────────────────────
+    render_hr()
+    render_section_header("Data Credibility Score",
+                          subtitle="Automated checks on source authenticity, consistency, and completeness")
+
+    _cache_key = cached.get("cache_key", (None,))
+    _src_type  = _cache_key[0] if isinstance(_cache_key, tuple) else "csv"
+    _ticker_for_verify = _cache_key[1] if (isinstance(_cache_key, tuple) and _src_type == "ticker") else None
+
+    # Map internal key to verifier source string
+    _source_map = {"pdf": "bloomberg_pdf", "ticker": "ticker", "csv": "csv"}
+    _verifier_source = _source_map.get(_src_type, "csv")
+
+    with st.spinner("Running credibility checks…"):
+        _report = run_verification(
+            source=_verifier_source,
+            payload=payload,
+            ticker=_ticker_for_verify,
+            fmp_api_key=fmp_api_key or "",
+        )
+    _render_credibility_panel(_report)
+
     render_hr()
     _render_agent_status_badges(payload, news_api_key)
 
-    # ── Missing data supplement form (shown when yfinance lacks required fields) ──
-    payload, agent_paths, written_path = _render_missing_data_supplement(
-        payload, agent_paths, written_path, source_label
-    )
-
+    # ── Smart Data Readiness Alert ────────────────────────────────────────────
     render_hr()
-    render_section_header("Run Agent Pipeline")
+    _avail        = _available_fields(payload)
+    _req_liq      = {"current_assets", "current_liabilities", "total_assets", "total_liabilities", "equity"}
+    _req_bs       = {"total_assets", "total_liabilities", "equity"}
+    _missing_liq  = sorted(_req_liq - _avail)
+    _missing_bs   = sorted(_req_bs  - _avail)
+    _all_missing  = sorted(set(_missing_liq) | set(_missing_bs))
 
-    if st.button("▶  RUN FULL ANALYSIS", use_container_width=False, key="run_pipeline_btn"):
-        _run_agent_pipeline(payload, agent_paths, base_url, model, api_key, news_api_key)
+    if not _all_missing:
+        # All good — show green status and go straight to Run
+        st.markdown(
+            '<div style="background:#001A0D;border:1px solid #00FF8833;border-left:4px solid #00FF88;'
+            'border-radius:4px;padding:10px 16px;margin:4px 0;">'
+            '<span style="color:#00FF88;font-size:12px;font-weight:600;">✅ All required data present</span>'
+            '&nbsp;&nbsp;<span style="font-size:10px;color:#555;">All agents are ready to run the full analysis.</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        render_section_header("Run Agent Pipeline")
+        if st.button("▶  RUN FULL ANALYSIS", use_container_width=False, key="run_pipeline_btn"):
+            _run_agent_pipeline(payload, agent_paths, base_url, model, api_key, news_api_key)
+
+    else:
+        # Missing fields — show amber alert with two choices
+        _skipped_agents = []
+        if _missing_liq:
+            _skipped_agents.append("Liquidity Agent")
+        if _missing_bs:
+            _skipped_agents.append("Balance Sheet Agent")
+        _skipped_agents.append("Cross Reference Agent")
+
+        st.markdown(
+            f'<div style="background:#1A1000;border:1px solid #FFB00044;border-left:4px solid #FFB000;'
+            f'border-radius:4px;padding:10px 16px;margin:4px 0;">'
+            f'<span style="color:#FFB000;font-size:12px;font-weight:600;">⚠️ Incomplete Data Detected</span><br>'
+            f'<span style="font-size:10px;color:#999;">Missing fields: <b style="color:#FFB000;">'
+            f'{", ".join(_all_missing)}</b></span><br>'
+            f'<span style="font-size:10px;color:#666;">These agents will be skipped: '
+            f'{", ".join(_skipped_agents)}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        col_proceed, col_fix = st.columns([1, 1])
+        _proceed_anyway = col_proceed.button(
+            "▶  Proceed Anyway (skip missing agents)",
+            key="run_pipeline_skip_btn",
+            help="Run available agents now. Missing agents will be skipped.",
+        )
+        _fix_clicked = col_fix.button(
+            "✏️  Fix Missing Data",
+            key="toggle_supplement_btn",
+            help="Auto-fetch or manually enter the missing fields before running.",
+        )
+
+        if _fix_clicked:
+            st.session_state["show_supplement"] = True
+        if _proceed_anyway:
+            st.session_state.pop("show_supplement", None)
+
+        # Only show the supplement form when user explicitly asked for it
+        if st.session_state.get("show_supplement"):
+            payload, agent_paths, written_path = _render_missing_data_supplement(
+                payload, agent_paths, written_path, source_label,
+                fmp_api_key=fmp_api_key,
+                av_api_key=av_api_key,
+            )
+
+        # Run pipeline (either via proceed-anyway or after fixing data)
+        if _proceed_anyway:
+            _run_agent_pipeline(payload, agent_paths, base_url, model, api_key, news_api_key)
 
     outputs = st.session_state.get("agent_outputs")
     if outputs:
@@ -522,6 +744,7 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "")
             ("Cross Reference Agent", "cross_reference", "xref"),
         ]:
             render_agent_card(label, outputs.get(key, {}), css_variant=variant)
+
 
 
 # ── Page 2 ────────────────────────────────────────────────────────────────────
@@ -708,8 +931,18 @@ def page_basel() -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    st.set_page_config(page_title="Financial Analysis Terminal", page_icon="▪", layout="wide", initial_sidebar_state="expanded")
+    st.set_page_config(
+        page_title="FinVeritas — Financial Analysis Platform",
+        page_icon="⬡",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
     load_css()
+
+    # Read theme prefs from session_state (set by sidebar below)
+    _light = st.session_state.get("light_mode", False)
+    _fscale = st.session_state.get("font_scale", 1.0)
+    inject_theme_vars(font_scale=_fscale, light_mode=_light)
 
     entity = "—"
     cached = st.session_state.get("ocr_cache", {})
@@ -722,8 +955,11 @@ def main() -> None:
     with st.sidebar:
         st.markdown("""
             <div class="bb-sidebar-logo">
-                <div class="bb-sidebar-logo-icon">▪</div>
-                <div class="bb-sidebar-logo-text">Financial Terminal</div>
+                <div class="bb-sidebar-brand-mark">FV</div>
+                <div>
+                    <div class="bb-sidebar-logo-text">FinVeritas</div>
+                    <div class="bb-sidebar-logo-sub">Financial Analysis</div>
+                </div>
             </div>""", unsafe_allow_html=True)
 
         st.markdown('<div class="bb-nav-label">Navigation</div>', unsafe_allow_html=True)
@@ -732,16 +968,63 @@ def main() -> None:
             label_visibility="collapsed")
 
         render_hr()
-        st.markdown('<div class="bb-nav-label" style="margin-top:8px;">⚙  LLM Settings</div>', unsafe_allow_html=True)
+        st.markdown('<div class="bb-nav-label" style="margin-top:8px;">Display</div>', unsafe_allow_html=True)
+        theme_choice = st.radio("",
+            ["Dark", "Light"],
+            index=1 if _light else 0,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="theme_radio",
+        )
+        new_light = (theme_choice == "Light")
+        if new_light != _light:
+            st.session_state["light_mode"] = new_light
+            st.rerun()
+        font_scale = st.slider(
+            "Font size", min_value=0.8, max_value=1.4, value=_fscale, step=0.1,
+            format="%.1fx", key="font_scale_slider",
+        )
+        if font_scale != _fscale:
+            st.session_state["font_scale"] = font_scale
+            st.rerun()
+
+        render_hr()
+        st.markdown('<div class="bb-nav-label" style="margin-top:8px;">LLM Settings</div>', unsafe_allow_html=True)
         base_url = st.text_input("Base URL", value=_DEFAULT_BASE_URL)
         model    = st.text_input("Model",    value=_DEFAULT_MODEL)
         api_key  = st.text_input("API Key",  value=_DEFAULT_API_KEY, type="password")
 
         render_hr()
-        st.markdown('<div class="bb-nav-label" style="margin-top:8px;">📰  News Settings</div>', unsafe_allow_html=True)
+        st.markdown('<div class="bb-nav-label" style="margin-top:8px;">News</div>', unsafe_allow_html=True)
         news_api_key = st.text_input(
             "NewsAPI Key", value=_DEFAULT_NEWS_API_KEY, type="password",
             help="Free key at newsapi.org — enables the Sentiment Agent",
+        )
+
+        render_hr()
+        st.markdown('<div class="bb-nav-label" style="margin-top:8px;">Supplemental Sources</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<p style="font-size:9px;color:var(--c-text3,#5A5A72);margin:2px 0 6px 0;">'
+            "Auto-fill missing fields when yfinance data is incomplete.</p>",
+            unsafe_allow_html=True,
+        )
+        fmp_api_key = st.text_input(
+            "FMP Key", value=_DEFAULT_FMP_KEY, type="password",
+            help="Free 250 req/day — financialmodelingprep.com",
+        )
+        st.markdown(
+            '<a href="https://financialmodelingprep.com/developer/docs" target="_blank" '
+            'style="font-size:9px;color:#444;">Get free FMP key ↗</a>',
+            unsafe_allow_html=True,
+        )
+        av_api_key = st.text_input(
+            "Alpha Vantage Key", value=_DEFAULT_AV_KEY, type="password",
+            help="Free 25 req/day — alphavantage.co (backup source)",
+        )
+        st.markdown(
+            '<a href="https://www.alphavantage.co/support/#api-key" target="_blank" '
+            'style="font-size:9px;color:#444;">Get free AV key ↗</a>',
+            unsafe_allow_html=True,
         )
 
         render_hr()
@@ -749,12 +1032,13 @@ def main() -> None:
         has_results = bool(st.session_state.get("agent_outputs"))
         st.markdown(
             f'<div style="font-size:9px;color:#444;line-height:2;letter-spacing:0.05em;">'
-            f'OCR DATA&nbsp;&nbsp; <span style="color:{"#00FF88" if has_data else "#333"};">{"■ LOADED" if has_data else "□ NONE"}</span><br>'
-            f'ANALYSIS&nbsp;&nbsp; <span style="color:{"#00FF88" if has_results else "#333"};">{"■ READY" if has_results else "□ NONE"}</span>'
+            f'OCR DATA&nbsp;&nbsp; <span style="color:{"#00FF88" if has_data else "#333"}.">{"■ LOADED" if has_data else "□ NONE"}</span><br>'
+            f'ANALYSIS&nbsp;&nbsp; <span style="color:{"#00FF88" if has_results else "#333"}.">{"■ READY" if has_results else "□ NONE"}</span>'
             f"</div>", unsafe_allow_html=True)
 
     if "Upload" in page:
-        page_upload(base_url, model, api_key, news_api_key)
+        page_upload(base_url, model, api_key, news_api_key,
+                    fmp_api_key=fmp_api_key, av_api_key=av_api_key)
     elif "Workflow" in page:
         page_workflow()
     elif "Analysis" in page:
