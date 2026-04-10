@@ -8,6 +8,7 @@ import html
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import re
 
 import streamlit as st
 
@@ -82,6 +83,56 @@ def inject_theme_vars(font_scale: float = 1.0, light_mode: bool = False) -> None
     .bb-pillar-badge {{ font-size: {px(9)}; }}
     .bb-skip-card {{ font-size: {px(11)}; }}
     .bb-legend-item {{ font-size: {px(10)}; }}
+    
+    /* ── Profile Dropdown Menu ── */
+    .bb-profile-menu {{
+        position: relative;
+        display: inline-block;
+        cursor: pointer;
+    }}
+    .bb-profile-menu-content {{
+        display: none;
+        position: absolute;
+        right: 0;
+        top: 100%;
+        margin-top: 4px;
+        min-width: 140px;
+        background-color: var(--c-bg, #0A0B0E);
+        border: 1px solid var(--c-border, #1E2030);
+        box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.5);
+        z-index: 999;
+        border-radius: 4px;
+    }}
+    
+    /* Invisible bridge to prevent dropdown from disappearing during drag/hover */
+    .bb-profile-menu::after {{
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        height: 10px;
+        display: none;
+    }}
+    .bb-profile-menu:hover::after {{
+        display: block;
+    }}
+    .bb-profile-menu:hover .bb-profile-menu-content {{
+        display: block;
+    }}
+    .bb-profile-item {{
+        color: var(--c-text, #D8D8E0) !important;
+        padding: 12px 18px;
+        text-decoration: none !important;
+        display: block;
+        font-size: 13px;
+        text-align: left;
+        transition: background-color 0.2s, color 0.2s;
+    }}
+    .bb-profile-item:hover {{
+        background-color: var(--c-bg2, #10121A);
+        color: var(--c-accent, #D4963A) !important;
+    }}
     </style>"""
     st.markdown(font_css, unsafe_allow_html=True)
 
@@ -345,10 +396,38 @@ def inject_theme_vars(font_scale: float = 1.0, light_mode: bool = False) -> None
 # Top bar
 # ─────────────────────────────────────────────────────────────────────────────
 
-def render_top_bar(entity: str = "—") -> None:
-    """Render the FinVeritas top bar."""
+def render_top_bar(entity: str = "—", user_name: str | None = None) -> None:
+    """Render the FinVeritas top bar.
+
+    Args:
+        entity:    Currently loaded entity name (shown in centre-right).
+        user_name: Authenticated user's full name. When provided, shows a
+                   profile badge and Logout button in the top-right corner.
+    """
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d  %H:%M:%S UTC")
     entity_display = html.escape(entity.upper() if entity != "—" else "—")
+
+    # Build profile section HTML (shown only when logged in)
+    if user_name:
+        initials = "".join(w[0].upper() for w in user_name.strip().split()[:2])
+        name_escaped = html.escape(user_name.strip())
+        profile_html = (
+            f'<div class="bb-profile-menu">'
+            f'<div style="display:flex;align-items:center;gap:12px;">'
+            f'<div style="display:inline-flex;align-items:center;justify-content:center;'
+            f'width:38px;height:38px;border-radius:50%;background:var(--c-accent,#D4963A);'
+            f'color:#0A0B0E;font-size:16px;font-weight:800;letter-spacing:0.05em;">'
+            f'{initials}</div>'
+            f'<div style="font-size:16px;font-weight:600;color:var(--c-text2,#9A9AB0);">{name_escaped} &nbsp;▾</div>'
+            f'</div>'
+            f'<div class="bb-profile-menu-content">'
+            f'<a href="/?logout=1" target="_self" class="bb-profile-item">Sign Out</a>'
+            f'</div>'
+            f'</div>'
+        )
+    else:
+        profile_html = ""
+
     st.markdown(
         f"""
         <div class="bb-topbar">
@@ -363,6 +442,7 @@ def render_top_bar(entity: str = "—") -> None:
                 <span><span class="bb-status-dot"></span>ONLINE</span>
                 <span>ENTITY: <span class="bb-topbar-entity">{entity_display}</span></span>
                 <span>{now}</span>
+                {profile_html}
             </div>
         </div>
         """,
@@ -404,11 +484,26 @@ def _fmt_value(v: float | None) -> str:
 
 
 def _latest(ts: dict[str, Any], field: str) -> tuple[str, str]:
-    """Return (formatted_value, period) for the most recent non-null entry."""
+    """Return (formatted_value, period) for the most recent non-null entry (ignoring future estimates)."""
     series = ts.get(field) or []
+    current_year = datetime.now(timezone.utc).year
+    
+    # First pass: try to find a valid historical figure (year <= current_year)
+    for item in reversed(series):
+        if isinstance(item, dict) and item.get("value") is not None:
+            period = str(item.get("period", "—"))
+            try:
+                if int(period[:4]) > current_year:
+                    continue  # Skip future projections like 2027 Estimates
+            except ValueError:
+                pass
+            return _fmt_value(float(item["value"])), period
+            
+    # Fallback to absolute last if nothing else was found
     for item in reversed(series):
         if isinstance(item, dict) and item.get("value") is not None:
             return _fmt_value(float(item["value"])), str(item.get("period", "—"))
+            
     return "N/A", "—"
 
 
@@ -440,6 +535,30 @@ def render_metric_cards(payload: dict[str, Any]) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Agent cards
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _highlight_analysis(text: str) -> str:
+    if not text:
+        return ""
+    escaped = html.escape(text).replace("\n", "<br>")
+    
+    # Positive words -> bright green
+    escaped = re.sub(
+        r'\b(growth|increase|improving|positive|strong|stable|profit|upward|excellent|healthy)\b', 
+        r'<strong style="color:#00FF88;">\1</strong>', 
+        escaped, 
+        flags=re.IGNORECASE
+    )
+    
+    # Negative/Risk words -> amber/red
+    escaped = re.sub(
+        r'\b(decline|declining|risk|negative|drop|deficit|weak|volatility|failed|warning|downward|poor|threat)\b', 
+        r'<strong style="color:#FFB000;">\1</strong>', 
+        escaped, 
+        flags=re.IGNORECASE
+    )
+
+    return escaped
+
 
 def _flat_metrics_rows(metrics: dict[str, Any]) -> str:
     """Render a flat metrics dict as table rows HTML."""
@@ -542,6 +661,8 @@ def render_cross_ref_card(output: dict[str, Any]) -> None:
         val = sub.get(field, "—") if field else "—"
         if isinstance(val, float):
             val_str = f"{val:.2f}"
+            if field and any(x in field.lower() for x in ["cagr", "pct", "margin", "rate", "percent"]):
+                val_str += "%"
         else:
             val_str = str(val)
         summary_rows += (
@@ -560,9 +681,9 @@ def render_cross_ref_card(output: dict[str, Any]) -> None:
     # Render analysis separately — replace newlines with <br> so blank lines
     # inside LLM output don't break the Markdown HTML block parser
     if analysis:
-        escaped = html.escape(analysis).replace("\n", "<br>")
+        formatted_analysis = _highlight_analysis(analysis)
         st.markdown(
-            f'<div class="bb-analysis">{escaped}</div>',
+            f'<div class="bb-analysis">{formatted_analysis}</div>',
             unsafe_allow_html=True,
         )
 

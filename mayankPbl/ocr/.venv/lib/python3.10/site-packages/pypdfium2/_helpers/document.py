@@ -3,14 +3,16 @@
 
 __all__ = ("PdfDocument", "PdfFormEnv", "PdfXObject", "PdfBookmark", "PdfDest")
 
+import sys
 import ctypes
 import logging
+import warnings
 from pathlib import Path
 
 import pypdfium2.raw as pdfium_c
 import pypdfium2.internal as pdfium_i
 from pypdfium2.version import PDFIUM_INFO
-from pypdfium2._helpers.misc import PdfiumError
+from pypdfium2._helpers.misc import PdfiumError, PdfiumWarning
 from pypdfium2._helpers.page import PdfPage
 from pypdfium2._helpers.pageobjects import PdfObject
 from pypdfium2._helpers.attachment import PdfAttachment
@@ -23,7 +25,7 @@ class PdfDocument (pdfium_i.AutoCloseable):
     Document helper class.
     
     Parameters:
-        input_data (str | pathlib.Path | bytes | ctypes.Array | typing.BinaryIO | FPDF_DOCUMENT):
+        input (str | pathlib.Path | bytes | ctypes.Array | typing.BinaryIO | FPDF_DOCUMENT):
             The input PDF given as file path, bytes, ctypes array, byte stream, or raw PDFium document handle.
             A byte stream is defined as an object that implements ``seek() tell() read() readinto()``.
         password (str | None):
@@ -141,15 +143,19 @@ class PdfDocument (pdfium_i.AutoCloseable):
     
     def init_forms(self, config=None):
         """
-        Initialize a form env, if the document has forms. If already initialized, nothing will be done.
-        See the :attr:`formenv` attribute.
-    
+        Initialize a form env, if the document has forms.
+        If already initialized, nothing will be done. See the :attr:`formenv` attribute.
+        
+        If PDFium was built with XFA support and the PDF has XFA forms, it will be attempted to load these as well.
+        
         Attention:
             If form rendering is desired, this method shall be called right after document construction, before getting document length or page handles.
         
         Parameters:
             config (FPDF_FORMFILLINFO | None):
                 Custom form config interface to use (optional).
+        Raises:
+            PdfiumWarning: When an attempt to load XFA forms was made and it failed, a warning will be issued using :func:`warnings.warn`, with :attr:`~.PdfiumWarning.err_code` information (:attr:`FPDF_ERR_XFA*`).
         """
         
         formtype = self.get_formtype()
@@ -173,9 +179,8 @@ class PdfDocument (pdfium_i.AutoCloseable):
             if "XFA" in PDFIUM_INFO.flags:  # pragma: no cover
                 ok = pdfium_c.FPDF_LoadXFA(self)
                 if not ok:
-                    # FIXME ability to propagate an optional exception with error code info?
                     err = pdfium_c.FPDF_GetLastError()
-                    logger.warning(f"FPDF_LoadXFA() failed with {pdfium_i.XFAErrorToStr.get(err)}")
+                    warnings.warn(PdfiumWarning(f"FPDF_LoadXFA() failed with {pdfium_i.XFAErrorToStr.get(err)}", err))
             else:
                 logger.warning(
                     "init_forms() called on XFA pdf, but this pdfium binary was compiled without XFA support.\n"
@@ -253,7 +258,7 @@ class PdfDocument (pdfium_i.AutoCloseable):
         n_bytes = pdfium_c.FPDF_GetFileIdentifier(self, type, None, 0)
         buffer = ctypes.create_string_buffer(n_bytes)
         pdfium_c.FPDF_GetFileIdentifier(self, type, buffer, n_bytes)
-        return buffer.raw[:n_bytes-2]
+        return buffer[:n_bytes-2]
     
     
     def get_version(self):
@@ -279,7 +284,7 @@ class PdfDocument (pdfium_i.AutoCloseable):
         n_bytes = pdfium_c.FPDF_GetMetaText(self, enc_key, None, 0)
         buffer = ctypes.create_string_buffer(n_bytes)
         pdfium_c.FPDF_GetMetaText(self, enc_key, buffer, n_bytes)
-        return buffer.raw[:n_bytes-2].decode("utf-16-le")
+        return buffer[:n_bytes-2].decode("utf-16-le")
     
     
     METADATA_KEYS = ("Title", "Author", "Subject", "Keywords", "Creator", "Producer", "CreationDate", "ModDate")
@@ -460,7 +465,7 @@ class PdfDocument (pdfium_i.AutoCloseable):
         n_bytes = pdfium_c.FPDF_GetPageLabel(self, index, None, 0)
         buffer = ctypes.create_string_buffer(n_bytes)
         pdfium_c.FPDF_GetPageLabel(self, index, buffer, n_bytes)
-        return buffer.raw[:n_bytes-2].decode("utf-16-le")
+        return buffer[:n_bytes-2].decode("utf-16-le")
     
     
     def page_as_xobject(self, index, dest_pdf):
@@ -525,6 +530,8 @@ class PdfDocument (pdfium_i.AutoCloseable):
             bm_ptr = pdfium_c.FPDFBookmark_GetNextSibling(self, bm_ptr)
 
 
+_ENC_ERRHANDLER = ("surrogateescape", ) if not sys.platform.startswith("win32") else ()
+
 def _open_pdf(input_data, password, autoclose):
     
     to_hold, to_close = (), ()
@@ -532,7 +539,7 @@ def _open_pdf(input_data, password, autoclose):
         password = (password+"\x00").encode("utf-8")
     
     if isinstance(input_data, Path):
-        pdf = pdfium_c.FPDF_LoadDocument((str(input_data)+"\x00").encode("utf-8"), password)
+        pdf = pdfium_c.FPDF_LoadDocument((str(input_data)+"\x00").encode("utf-8", *_ENC_ERRHANDLER), password)
     elif isinstance(input_data, (bytes, ctypes.Array)):
         pdf = pdfium_c.FPDF_LoadMemDocument64(input_data, len(input_data), password)
         to_hold = (input_data, )
@@ -637,7 +644,7 @@ class PdfBookmark (pdfium_i.AutoCastable):
         n_bytes = pdfium_c.FPDFBookmark_GetTitle(self, None, 0)
         buffer = ctypes.create_string_buffer(n_bytes)
         pdfium_c.FPDFBookmark_GetTitle(self, buffer, n_bytes)
-        return buffer.raw[:n_bytes-2].decode("utf-16-le")
+        return buffer[:n_bytes-2].decode("utf-16-le")
     
     def get_count(self):
         """

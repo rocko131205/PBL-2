@@ -19,3 +19,10 @@ openpyxl>=3.1
 streamlit>=1.34
 streamlit-agraph>=0.0.45
 graphviz>=0.20
+
+# ── Auth & Database ───────────────────────────────────────────────────────────
+pymongo>=4.6            # MongoDB driver
+bcrypt>=4.1             # Password hashing
+PyJWT>=2.8              # JWT token creation / validation
+python-dotenv>=1.0      # Load .env into os.environ
+dnspython>=2.4          # Required for MongoDB Atlas SRV connection strings

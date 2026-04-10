@@ -41,11 +41,13 @@ def run(
         "liquidity_metrics": liquidity.get("metrics"),
         "balance_sheet_metrics": balance_sheet.get("metrics"),
     }
-    must_include = [
-        "a short revenue summary",
-        "a short liquidity summary",
-        "a short balance sheet/leverage summary",
-    ]
+    must_include = []
+    if revenue.get("metrics"):
+        must_include.append("a short revenue summary")
+    if liquidity.get("metrics"):
+        must_include.append("a short liquidity summary")
+    if balance_sheet.get("metrics"):
+        must_include.append("a short balance sheet/leverage summary")
     if sentiment:
         inputs["sentiment_metrics"] = sentiment.get("metrics")
         inputs["sentiment_analysis_snippet"] = (

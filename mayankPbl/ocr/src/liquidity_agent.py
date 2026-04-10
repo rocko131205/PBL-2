@@ -153,17 +153,23 @@ def extract_liquidity_metrics(payload: dict[str, Any]) -> tuple[str, pd.DataFram
         }
     )
 
-    # Basic sanity: negative values are unusual for these fields.
-    for col in [
-        "current_assets",
-        "current_liabilities",
-        "total_assets",
-        "total_liabilities",
-        "equity",
-    ]:
+    # current_assets, current_liabilities, total_assets, total_liabilities must
+    # always be positive by accounting convention — reject if negative (data error).
+    # Equity CAN be negative (stockholders' deficit in leveraged companies) — allow it.
+    for col in ["current_assets", "current_liabilities", "total_assets", "total_liabilities"]:
         if (df[col] < 0).any():
             bad = df.loc[df[col] < 0, ["period", col]].to_dict("records")
-            raise ValueError(f"Negative values detected for {col}: {bad}")
+            raise ValueError(
+                f"Negative values for '{col}' suggest a data ingestion error: {bad}. "
+                f"'{col}' must always be positive."
+            )
+
+    if (df["equity"] < 0).any():
+        import warnings
+        warnings.warn(
+            "Negative equity (stockholders' deficit) detected — extreme leverage risk signal.",
+            RuntimeWarning,
+        )
 
     # Chronological ordering check is implicit in the sorted periods above.
     provided = df["period"].tolist()

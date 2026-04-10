@@ -162,11 +162,25 @@ def extract_balance_sheet_data(payload: dict[str, Any]) -> tuple[str, pd.DataFra
         }
     )
 
-    # Negative values are generally suspicious here.
-    for col in ["total_assets", "total_liabilities", "equity"]:
+    # Negative equity (stockholders' deficit) is a real and important signal
+    # in highly leveraged companies — do NOT reject it, just let the maths
+    # show a high leverage ratio naturally.
+    # However, negative total_assets or total_liabilities would be a data
+    # error (they are always non-negative by accounting convention).
+    for col in ["total_assets", "total_liabilities"]:
         if (df[col] < 0).any():
             bad = df.loc[df[col] < 0, ["period", col]].to_dict("records")
-            raise ValueError(f"Negative values detected for {col}: {bad}")
+            raise ValueError(
+                f"Negative values for '{col}' suggest a data ingestion error: {bad}. "
+                "total_assets and total_liabilities must always be positive."
+            )
+
+    if (df["equity"] < 0).any():
+        # Negative equity = stockholders' deficit — valid, treat as extreme risk signal
+        warnings.warn(
+            "Negative equity (stockholders' deficit) detected — high leverage risk signal.",
+            RuntimeWarning,
+        )
 
     # Accounting identity check: assets ≈ liabilities + equity.
     # Raise a warning when mismatch > 5%.

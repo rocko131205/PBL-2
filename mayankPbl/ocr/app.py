@@ -10,6 +10,7 @@ Pages
 from __future__ import annotations
 
 import traceback
+import html
 from typing import Any
 
 import pandas as pd
@@ -39,12 +40,20 @@ from ui.dashboard_components import (
     render_section_header,
     render_top_bar,
 )
+from auth.auth_controller import decode_token
+from auth.ui_pages import page_login, page_register, page_forgot_password, page_history
+from auth.db import get_file_history, make_history_doc
 
-_DEFAULT_BASE_URL     = "http://127.0.0.1:1234/v1"
-_DEFAULT_MODEL        = "qwen2.5-coder-1.5b-instruct-mlx"
-_DEFAULT_API_KEY      = "local"
-_DEFAULT_NEWS_API_KEY = ""
-_DEFAULT_FMP_KEY      = ""
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+_DEFAULT_BASE_URL     = os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234/v1")
+_DEFAULT_MODEL        = os.getenv("LLM_MODEL", "qwen2.5-coder-1.5b-instruct-mlx")
+_DEFAULT_API_KEY      = os.getenv("LLM_API_KEY", "local")
+_DEFAULT_NEWS_API_KEY = os.getenv("NEWSAPI_KEY", "")
+_DEFAULT_FMP_KEY      = os.getenv("FMP_API_KEY", "")
 _DEFAULT_AV_KEY       = ""
 
 
@@ -420,9 +429,9 @@ def _run_agent_pipeline(
             )
 
     _sentiment_ok = sentiment_out and not isinstance(sentiment_out.get("error"), str)
-    any_err = any(isinstance(x.get("error"), str) for x in [rev_out, liq_out, bs_out])
-    if any_err:
-        cross_out: dict = {"error": "Cross Reference Agent skipped — requires Revenue, Liquidity, and Balance Sheet agents to succeed."}
+    _valid_outputs = sum(1 for x in [rev_out, liq_out, bs_out, sentiment_out] if x and not isinstance(x.get("error"), str))
+    if _valid_outputs < 3:
+        cross_out: dict = {"error": "Cross Reference Agent skipped — requires at least 3 successful agent outputs to run reliably."}
     else:
         with st.spinner("Cross Reference Agent…"):
             _rev, _liq, _bs = rev_out, liq_out, bs_out
@@ -439,7 +448,34 @@ def _run_agent_pipeline(
         "entity": entity, "revenue": rev_out, "liquidity": liq_out,
         "balance_sheet": bs_out, "sentiment": sentiment_out, "cross_reference": cross_out,
     }
-    st.success("Analysis complete — navigate to **Financial Analysis** to view results.")
+
+    # ── Save to MongoDB file history ──────────────────────────────────────────
+    try:
+        _user = st.session_state.get("auth_user") or {}
+        _uid  = _user.get("user_id")
+        _cached = st.session_state.get("ocr_cache", {})
+        _payload_hist = _cached.get("payload") or payload
+        _report_hist  = run_verification(
+            source={
+                "pdf": "bloomberg_pdf", "ticker": "ticker", "csv": "csv"
+            }.get((_cached.get("cache_key") or ("csv",))[0], "csv"),
+            payload=_payload_hist,
+        )
+        if _uid:
+            _doc = make_history_doc(
+                user_id=_uid,
+                source_type=(_cached.get("cache_key") or ("csv",))[0],
+                source_label=_cached.get("source_label", "—"),
+                entity_name=entity,
+                fields_loaded=list(_available_fields(_payload_hist)),
+                credibility_score=_report_hist.score,
+            )
+            get_file_history().insert_one(_doc)
+    except Exception:
+        pass  # history is non-critical — never break the pipeline
+
+    # ── Notify user (No Auto-redirect) ──────────────────────────────────────────────
+    st.success("✅ **Analysis complete!** You can now navigate to the **Financial Analysis** section in the sidebar.")
 
 
 def _render_agent_status_badges(payload: dict[str, Any], news_api_key: str) -> None:
@@ -460,8 +496,8 @@ def _render_agent_status_badges(payload: dict[str, Any], news_api_key: str) -> N
     for col, (name, ready, colour) in zip(cols, statuses):
         c = colour if ready else "#444"
         col.markdown(
-            f'<div style="text-align:center;font-size:10px;color:{c};">{"●" if ready else "○"}&nbsp;{name}<br>'
-            f'<span style="font-size:9px;color:#555;">{"READY" if ready else "MISSING DATA"}</span></div>',
+            f'<div style="text-align:center;font-size:12px;color:{c};font-weight:700;letter-spacing:0.04em;margin-bottom:8px;">{"●" if ready else "○"}&nbsp;{name}<br>'
+            f'<span style="font-size:10px;color:#777;font-weight:normal;letter-spacing:0.02em;">{"READY" if ready else "MISSING DATA"}</span></div>',
             unsafe_allow_html=True,
         )
 
@@ -475,14 +511,21 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
         subtitle="Choose your data source: Bloomberg PDF · Listed Ticker · Private Company CSV",
     )
 
-    tab_pdf, tab_ticker, tab_csv = st.tabs([
-        "Bloomberg PDF",
-        "Fetch by Ticker",
-        "Private Company (CSV / Excel)",
-    ])
+    def _clear_all_caches():
+        for k in ["cache_pdf", "cache_ticker", "cache_csv", "ocr_cache", "agent_outputs"]:
+            st.session_state.pop(k, None)
+
+    ingestion_mode = st.radio(
+        "",
+        ["Bloomberg PDF", "Fetch by Ticker", "Private Company CSV"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="ingestion_mode_radio",
+        on_change=_clear_all_caches,
+    )
 
     # ── Tab 1: Bloomberg PDF ──────────────────────────────────────────────────
-    with tab_pdf:
+    if ingestion_mode == "Bloomberg PDF":
         st.markdown(
             '<p style="font-size:11px;color:#666;font-family:monospace;">'
             "▸ Upload <b>both</b> the Income Statement PDF and the Balance Sheet PDF together "
@@ -497,8 +540,8 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
             st.markdown('<div style="color:#444;font-size:11px;margin-top:8px;">▸ Awaiting upload…</div>', unsafe_allow_html=True)
         else:
             cache_key = ("pdf",) + tuple(sorted(f.name for f in uploaded_files))
-            cached = st.session_state.get("ocr_cache", {})
-            if cached.get("cache_key") != cache_key:
+            cached_pdf = st.session_state.get("cache_pdf", {})
+            if cached_pdf.get("cache_key") != cache_key:
                 uploads = [(f.getvalue(), f.name) for f in uploaded_files]
                 with st.spinner(f"Running OCR parser on {len(uploads)} file(s)…"):
                     try:
@@ -506,18 +549,21 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
                     except Exception as exc:
                         st.error(f"OCR failed: {exc}")
                         st.stop()
-                st.session_state["ocr_cache"] = {
+                st.session_state["cache_pdf"] = {
                     "cache_key": cache_key, "payload": payload,
                     "written_path": written_path, "agent_paths": agent_paths,
                     "source_label": f"{len(uploads)} Bloomberg PDF(s)",
                 }
+                st.session_state["active_source"] = "pdf"
+                st.session_state["ocr_cache"] = st.session_state["cache_pdf"]
                 st.session_state.pop("agent_outputs", None)
                 st.success(f"OCR complete — {len(uploads)} PDF(s) merged → `{written_path.name}`")
             else:
-                st.info(f"Cached: `{cached['written_path'].name}`")
+                st.info(f"Cached: `{cached_pdf['written_path'].name}`")
 
     # ── Tab 2: Fetch by Ticker (yfinance) ────────────────────────────────────
-    with tab_ticker:
+    elif ingestion_mode == "Fetch by Ticker":
+
         st.markdown(
             '<p style="font-size:11px;color:#666;font-family:monospace;">'
             "▸ Enter a Yahoo Finance ticker to automatically fetch annual financial statements. "
@@ -541,24 +587,26 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
                 except Exception as exc:
                     st.error(f"Ticker fetch failed: {exc}")
                     st.stop()
-            st.session_state["ocr_cache"] = {
+            st.session_state["cache_ticker"] = {
                 "cache_key": cache_key, "payload": payload,
                 "written_path": written_path, "agent_paths": agent_paths,
                 "source_label": f"yfinance · {ticker}",
             }
+            st.session_state["active_source"] = "ticker"
+            st.session_state["ocr_cache"] = st.session_state["cache_ticker"]
             st.session_state.pop("agent_outputs", None)
             entity_name = payload.get("entity", {}).get("entity_id", ticker)
             st.success(f"Fetched: **{entity_name}** — {len(payload.get('time_series', {}))} fields available")
         elif fetch_btn:
             st.warning("Enter a ticker symbol first.")
 
-        # Show cached ticker info
-        cached = st.session_state.get("ocr_cache", {})
-        if cached.get("cache_key", (None,))[0] == "ticker":
-            st.info(f"Active dataset: {cached.get('source_label', '—')}")
+        cached_ticker = st.session_state.get("cache_ticker", {})
+        if cached_ticker.get("cache_key", (None,))[0] == "ticker":
+            st.info(f"Active dataset: {cached_ticker.get('source_label', '—')}")
 
     # ── Tab 3: Private Company CSV / Excel ───────────────────────────────────
-    with tab_csv:
+    elif ingestion_mode == "Private Company CSV":
+
         st.markdown(
             '<p style="font-size:11px;color:#666;font-family:monospace;">'
             "▸ For private or non-listed companies: upload a CSV or Excel file with financial data. "
@@ -609,11 +657,13 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
                     except Exception as exc:
                         st.error(f"CSV ingestion failed: {exc}")
                         st.stop()
-                st.session_state["ocr_cache"] = {
+                st.session_state["cache_csv"] = {
                     "cache_key": cache_key, "payload": payload,
                     "written_path": written_path, "agent_paths": agent_paths,
                     "source_label": f"Private Upload · {csv_file.name}",
                 }
+                st.session_state["active_source"] = "csv"
+                st.session_state["ocr_cache"] = st.session_state["cache_csv"]
                 st.session_state.pop("agent_outputs", None)
                 fields_loaded = [k for k, v in payload.get("time_series", {}).items() if v]
                 st.success(f"Loaded **{company_name_input.strip()}** — {len(fields_loaded)} fields: {', '.join(fields_loaded[:6])}{'…' if len(fields_loaded) > 6 else ''}")
@@ -673,9 +723,9 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
         # All good — show green status and go straight to Run
         st.markdown(
             '<div style="background:#001A0D;border:1px solid #00FF8833;border-left:4px solid #00FF88;'
-            'border-radius:4px;padding:10px 16px;margin:4px 0;">'
-            '<span style="color:#00FF88;font-size:12px;font-weight:600;">✅ All required data present</span>'
-            '&nbsp;&nbsp;<span style="font-size:10px;color:#555;">All agents are ready to run the full analysis.</span>'
+            'border-radius:4px;padding:12px 16px;margin:12px 0 20px 0;display:flex;align-items:center;gap:12px;">'
+            '<span style="color:#00FF88;font-size:13px;font-weight:700;letter-spacing:0.02em;">✅ All required data present</span>'
+            '<span style="font-size:11px;color:#888;">All agents are ready to run the full analysis.</span>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -733,17 +783,8 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
         if _proceed_anyway:
             _run_agent_pipeline(payload, agent_paths, base_url, model, api_key, news_api_key)
 
-    outputs = st.session_state.get("agent_outputs")
-    if outputs:
-        render_section_header("Agent Status Summary")
-        for label, key, variant in [
-            ("Revenue Agent", "revenue", ""),
-            ("Liquidity Agent", "liquidity", "liq"),
-            ("Balance Sheet Agent", "balance_sheet", "bs"),
-            ("Sentiment Agent", "sentiment", ""),
-            ("Cross Reference Agent", "cross_reference", "xref"),
-        ]:
-            render_agent_card(label, outputs.get(key, {}), css_variant=variant)
+    # Agent results are now shown exclusively on the Financial Analysis page.
+    # After running the pipeline, the user is auto-redirected there.
 
 
 
@@ -753,6 +794,12 @@ def page_workflow() -> None:
     render_section_header("Agent Pipeline Architecture", subtitle="Hover over nodes to inspect outputs")
 
     outputs = st.session_state.get("agent_outputs") or {}
+    if not outputs:
+        if not st.session_state.get("ocr_cache"):
+            st.warning("⚠️ Please ingest data first by using the **Upload Statement** page.")
+        else:
+            st.warning("⚠️ No financial analysis done, hence no workflow generated. Please click **RUN FULL ANALYSIS** on the Upload page.")
+        return
 
     st.markdown("""
         <div class="bb-workflow-legend">
@@ -806,17 +853,46 @@ def page_workflow() -> None:
 
     render_hr()
     if outputs:
-        render_section_header("Agent Output Detail", subtitle="Expanded metrics per agent")
-        c1, c2 = st.columns(2)
-        with c1:
-            render_agent_card("Revenue Agent",       outputs.get("revenue", {}),       css_variant="")
-            render_agent_card("Balance Sheet Agent", outputs.get("balance_sheet", {}), css_variant="bs")
-            render_agent_card("Sentiment Agent",     outputs.get("sentiment", {}),     css_variant="")
-        with c2:
-            render_agent_card("Liquidity Agent",     outputs.get("liquidity", {}),     css_variant="liq")
-            render_cross_ref_card(outputs.get("cross_reference", {}))
+        render_section_header("Agent Transparency & Guardrails", subtitle="Active constraints and system rules enforced during execution")
+        
+        guardrails_html = """
+        <div style="background:#070809;border:1px solid #1E2030;border-left:4px solid #D4963A;padding:20px;border-radius:4px;">
+            <div style="display:flex;margin-bottom:16px;border-bottom:1px solid #1A1C23;padding-bottom:14px;">
+                <div style="width:200px;font-size:12px;color:#FFB000;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">Revenue Agent</div>
+                <div style="flex:1;font-size:13px;color:#9A9AB0;font-family:'Inter',sans-serif;line-height:1.6;">
+                    <strong style="color:#D8D8E0;">Deterministic Math Lock:</strong> Hardcoded to compute CAGR, volatility, and YoY growth via strict pandas formulas. LLM routing is disabled for metric calculations to prevent numeric hallucination.
+                </div>
+            </div>
+            <div style="display:flex;margin-bottom:16px;border-bottom:1px solid #1A1C23;padding-bottom:14px;">
+                <div style="width:200px;font-size:12px;color:#00BFFF;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">Liquidity Agent</div>
+                <div style="flex:1;font-size:13px;color:#9A9AB0;font-family:'Inter',sans-serif;line-height:1.6;">
+                    <strong style="color:#D8D8E0;">Restricted Output Schema:</strong> Output is strictly forced into an ISO formatting schema. Evaluates Working Capital using a standardized threshold algorithm before summarization.
+                </div>
+            </div>
+            <div style="display:flex;margin-bottom:16px;border-bottom:1px solid #1A1C23;padding-bottom:14px;">
+                <div style="width:200px;font-size:12px;color:#FF6B35;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">Balance Sheet Agent</div>
+                <div style="flex:1;font-size:13px;color:#9A9AB0;font-family:'Inter',sans-serif;line-height:1.6;">
+                    <strong style="color:#D8D8E0;">Accounting Integrity Check:</strong> Enforces the fundamental accounting identity (Assets ≈ Liabilities + Equity). Rejects unstructured estimations.
+                </div>
+            </div>
+            <div style="display:flex;margin-bottom:16px;border-bottom:1px solid #1A1C23;padding-bottom:14px;">
+                <div style="width:200px;font-size:12px;color:#CC88FF;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">Sentiment Agent</div>
+                <div style="flex:1;font-size:13px;color:#9A9AB0;font-family:'Inter',sans-serif;line-height:1.6;">
+                    <strong style="color:#D8D8E0;">Context Boundary:</strong> Limited to parsing NewsAPI top articles from the last 30 days. Cannot hallucinate past events beyond given API payload.
+                </div>
+            </div>
+            <div style="display:flex;">
+                <div style="width:200px;font-size:12px;color:#00FF88;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">Cross-Reference</div>
+                <div style="flex:1;font-size:13px;color:#9A9AB0;font-family:'Inter',sans-serif;line-height:1.6;">
+                    <strong style="color:#D8D8E0;">Synthesis Engine:</strong> Aggregates deterministic metrics from all prior agents to generate a unified financial narrative. Strictly prohibited from injecting new numbers, calculating secondary metrics, or offering credit/lending decisions.
+                </div>
+            </div>
+        </div>
+        """
+        st.markdown(guardrails_html, unsafe_allow_html=True)
+        
     else:
-        st.markdown('<div style="color:#444;font-size:11px;margin-top:12px;">▸ Run analysis on the Upload page to populate node tooltips.</div>', unsafe_allow_html=True)
+        st.markdown('<div style="color:#444;font-size:11px;margin-top:12px;">▸ Run analysis on the Upload page to view agent constraints.</div>', unsafe_allow_html=True)
 
 
 # ── Page 3 ────────────────────────────────────────────────────────────────────
@@ -826,11 +902,14 @@ def page_analysis() -> None:
 
     outputs = st.session_state.get("agent_outputs")
     if not outputs:
-        st.markdown('<div style="color:#444;font-size:12px;">▸ No analysis data yet. Upload PDFs and run the pipeline first.</div>', unsafe_allow_html=True)
+        if not st.session_state.get("ocr_cache"):
+            st.warning("⚠️ Please ingest data first by using the **Upload Statement** page.")
+        else:
+            st.warning("⚠️ Data loaded, but no financial analysis done yet. Please click **RUN FULL ANALYSIS** on the Upload page.")
         return
 
     entity = outputs.get("entity", "—")
-    st.markdown(f'<div style="font-size:10px;color:#555;margin-bottom:16px;">ENTITY: <span style="color:#FFB000;">{entity.upper()}</span></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-size:13px;color:#7A7D96;margin-bottom:24px;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid #1E2030;padding-bottom:12px;">Entity: <strong style="color:#FFB000;font-size:14px;">{entity.upper()}</strong></div>', unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
     with c1:
@@ -852,6 +931,24 @@ def page_analysis() -> None:
 
     render_hr()
     render_section_header("Cross Reference Agent", subtitle="Integrated Explainable Summary — Financial + Sentiment")
+
+    _valid_outputs_count = sum(1 for k in ["revenue", "liquidity", "balance_sheet", "sentiment"]
+                               if outputs.get(k) and not isinstance(outputs[k].get("error"), str))
+    if getattr(st.session_state, "_cross_ref_valid_count", None) != _valid_outputs_count:
+        st.session_state["_cross_ref_valid_count"] = _valid_outputs_count
+
+    if _valid_outputs_count == 3:
+        st.markdown(
+            '<div style="background:#1A0F00;border:1px solid #FF8800;border-left:4px solid #FF8800;'
+            'border-radius:4px;padding:12px;margin-bottom:16px;">'
+            '<span style="color:#FF8800;font-weight:bold;">⚠️ Partial Analysis Warning:</span><br>'
+            '<span style="color:#CCC;font-size:13px;">This cross-reference synthesis was generated using only 3 agent outputs. '
+            'The result may be less convincing or logical. In order to have the best or maximum summary, '
+            'try to provide all required data (or API keys) for all agents to successfully run.</span>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+
     render_cross_ref_card(outputs.get("cross_reference", {}))
 
     render_hr()
@@ -907,28 +1004,28 @@ def page_basel() -> None:
         </div>
 
         <div class="bb-basel-panel">
-            <div class="bb-section-title" style="margin-bottom:14px;">Agent → Framework Mapping</div>
+            <div class="bb-section-title" style="margin-bottom:14px;">Agent &#x2192; Framework Mapping</div>
             <div class="bb-metric-row">
                 <span class="bb-mkey" style="color:#FFB000;">Revenue Agent</span>
-                <span class="bb-mval" style="font-size:11px;">Income stability · Earnings trend analysis</span>
+                <span class="bb-mval" style="font-size:11px;">Income stability &#xB7; Earnings trend analysis</span>
             </div>
             <div class="bb-metric-row">
                 <span class="bb-mkey" style="color:#00BFFF;">Liquidity Agent</span>
-                <span class="bb-mval" style="font-size:11px;">Working capital adequacy · LCR-adjacent indicators</span>
+                <span class="bb-mval" style="font-size:11px;">Working capital adequacy &#xB7; LCR-adjacent indicators</span>
             </div>
             <div class="bb-metric-row">
                 <span class="bb-mkey" style="color:#FF6B35;">Balance Sheet Agent</span>
-                <span class="bb-mval" style="font-size:11px;">Leverage ratio monitoring · Asset quality signals</span>
+                <span class="bb-mval" style="font-size:11px;">Leverage ratio monitoring &#xB7; Asset quality signals</span>
             </div>
             <div class="bb-metric-row">
                 <span class="bb-mkey" style="color:#00FF88;">Cross Reference Agent</span>
-                <span class="bb-mval" style="font-size:11px;">Integrated risk narrative · Pillar 2 reporting aid</span>
+                <span class="bb-mval" style="font-size:11px;">Integrated risk narrative &#xB7; Pillar 2 reporting aid</span>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────
 
 def main() -> None:
     st.set_page_config(
@@ -939,18 +1036,66 @@ def main() -> None:
     )
     load_css()
 
-    # Read theme prefs from session_state (set by sidebar below)
-    _light = st.session_state.get("light_mode", False)
+    import time
+
+    if st.query_params.get("logout") == "1":
+        st.session_state.clear()
+        st.query_params.clear()
+        st.toast("Successfully signed out.", icon="👋")
+
+    # ── Auth gate ─────────────────────────────────────────────────────────────
+    # On page load, check URL query params for a persisted JWT token.
+    token = st.query_params.get("token") or st.session_state.get("auth_token")
+    user: dict | None = None
+    if token:
+        user = decode_token(token)
+        if user:
+            # Inactivity timeout check (15 minutes)
+            last_active = st.session_state.get("last_active_time", time.time())
+            if time.time() - last_active > 15 * 60:
+                st.query_params.clear()
+                st.session_state.pop("auth_token", None)
+                st.session_state.pop("auth_user", None)
+                st.toast("Locked due to 15 minutes of inactivity.", icon="🔒")
+                user = None
+            else:
+                st.session_state["last_active_time"] = time.time()
+                st.session_state["auth_token"] = token
+                st.session_state["auth_user"]  = user
+                
+        if not user:
+            # Token expired or invalid — clear it and ask to log in again
+            st.query_params.clear()
+            st.session_state.pop("auth_token", None)
+            st.session_state.pop("auth_user", None)
+
+    if not user:
+        # Show correct auth sub-page
+        auth_page = st.session_state.get("auth_page", "login")
+        if auth_page == "register":
+            page_register()
+        elif auth_page == "forgot":
+            page_forgot_password()
+        else:
+            page_login()
+        st.stop()  # Nothing else renders until authenticated
+
+    # ── Theme / font prefs ────────────────────────────────────────────────────
+    _light  = st.session_state.get("light_mode", False)
     _fscale = st.session_state.get("font_scale", 1.0)
     inject_theme_vars(font_scale=_fscale, light_mode=_light)
 
+    # ── Entity name for top bar ───────────────────────────────────────────────
     entity = "—"
     cached = st.session_state.get("ocr_cache", {})
     if cached:
-        payload = cached.get("payload") or {}
-        entity = str(payload.get("entity", {}).get("entity_id") or "—")
+        _pl = cached.get("payload") or {}
+        entity = str(_pl.get("entity", {}).get("entity_id") or "—")
 
-    render_top_bar(entity=entity)
+    render_top_bar(entity=entity, user_name=user.get("full_name", ""))
+
+    # ── Nav page (auto-redirect after analysis runs) ──────────────────────────
+    _nav_target = st.session_state.pop("nav_page", None)
 
     with st.sidebar:
         st.markdown("""
@@ -963,9 +1108,25 @@ def main() -> None:
             </div>""", unsafe_allow_html=True)
 
         st.markdown('<div class="bb-nav-label">Navigation</div>', unsafe_allow_html=True)
+
+        _nav_options = [
+            "Upload Statement",
+            "Financial Analysis",
+            "Agent Workflow",
+            "Basel III Alignment",
+            "My File History",
+        ]
+        # Default index — use nav_target if set (auto-redirect)
+        _default_idx = 0
+        if _nav_target and _nav_target in _nav_options:
+            _default_idx = _nav_options.index(_nav_target)
+
         page = st.radio("",
-            ["Upload Statement", "Agent Workflow", "Financial Analysis", "Basel III Alignment"],
-            label_visibility="collapsed")
+            _nav_options,
+            index=_default_idx,
+            label_visibility="collapsed",
+            key="sidebar_nav",
+        )
 
         render_hr()
         st.markdown('<div class="bb-nav-label" style="margin-top:8px;">Display</div>', unsafe_allow_html=True)
@@ -988,54 +1149,24 @@ def main() -> None:
             st.session_state["font_scale"] = font_scale
             st.rerun()
 
-        render_hr()
-        st.markdown('<div class="bb-nav-label" style="margin-top:8px;">LLM Settings</div>', unsafe_allow_html=True)
-        base_url = st.text_input("Base URL", value=_DEFAULT_BASE_URL)
-        model    = st.text_input("Model",    value=_DEFAULT_MODEL)
-        api_key  = st.text_input("API Key",  value=_DEFAULT_API_KEY, type="password")
-
-        render_hr()
-        st.markdown('<div class="bb-nav-label" style="margin-top:8px;">News</div>', unsafe_allow_html=True)
-        news_api_key = st.text_input(
-            "NewsAPI Key", value=_DEFAULT_NEWS_API_KEY, type="password",
-            help="Free key at newsapi.org — enables the Sentiment Agent",
-        )
-
-        render_hr()
-        st.markdown('<div class="bb-nav-label" style="margin-top:8px;">Supplemental Sources</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<p style="font-size:9px;color:var(--c-text3,#5A5A72);margin:2px 0 6px 0;">'
-            "Auto-fill missing fields when yfinance data is incomplete.</p>",
-            unsafe_allow_html=True,
-        )
-        fmp_api_key = st.text_input(
-            "FMP Key", value=_DEFAULT_FMP_KEY, type="password",
-            help="Free 250 req/day — financialmodelingprep.com",
-        )
-        st.markdown(
-            '<a href="https://financialmodelingprep.com/developer/docs" target="_blank" '
-            'style="font-size:9px;color:#444;">Get free FMP key ↗</a>',
-            unsafe_allow_html=True,
-        )
-        av_api_key = st.text_input(
-            "Alpha Vantage Key", value=_DEFAULT_AV_KEY, type="password",
-            help="Free 25 req/day — alphavantage.co (backup source)",
-        )
-        st.markdown(
-            '<a href="https://www.alphavantage.co/support/#api-key" target="_blank" '
-            'style="font-size:9px;color:#444;">Get free AV key ↗</a>',
-            unsafe_allow_html=True,
-        )
+        # Secrets are securely loaded from .env behind the scenes
+        base_url     = _DEFAULT_BASE_URL
+        model        = _DEFAULT_MODEL
+        api_key      = _DEFAULT_API_KEY
+        news_api_key = _DEFAULT_NEWS_API_KEY
+        fmp_api_key  = _DEFAULT_FMP_KEY
+        av_api_key   = ""
 
         render_hr()
         has_data    = bool(st.session_state.get("ocr_cache"))
         has_results = bool(st.session_state.get("agent_outputs"))
         st.markdown(
             f'<div style="font-size:9px;color:#444;line-height:2;letter-spacing:0.05em;">'
-            f'OCR DATA&nbsp;&nbsp; <span style="color:{"#00FF88" if has_data else "#333"}.">{"■ LOADED" if has_data else "□ NONE"}</span><br>'
-            f'ANALYSIS&nbsp;&nbsp; <span style="color:{"#00FF88" if has_results else "#333"}.">{"■ READY" if has_results else "□ NONE"}</span>'
+            f'OCR DATA&nbsp;&nbsp; <span style="color:{"#00FF88" if has_data else "#333"};">{"■ LOADED" if has_data else "□ NONE"}</span><br>'
+            f'ANALYSIS&nbsp;&nbsp; <span style="color:{"#00FF88" if has_results else "#333"};">{"■ READY" if has_results else "□ NONE"}</span>'
             f"</div>", unsafe_allow_html=True)
 
+    # ── Route to page ─────────────────────────────────────────────────────────
     if "Upload" in page:
         page_upload(base_url, model, api_key, news_api_key,
                     fmp_api_key=fmp_api_key, av_api_key=av_api_key)
@@ -1045,6 +1176,8 @@ def main() -> None:
         page_analysis()
     elif "Basel" in page:
         page_basel()
+    elif "History" in page:
+        page_history(user_id=user["user_id"])
 
 
 if __name__ == "__main__":
