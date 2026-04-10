@@ -53,9 +53,11 @@ Data Source (Bloomberg PDF / Ticker / CSV)
 | **Smart readiness alert** | Detects missing fields; lets you proceed or supplement before running |
 | **Auto-fill missing data** | FMP and Alpha Vantage APIs fill gaps when ticker data is incomplete |
 | **5 specialized agents** | Revenue, Balance Sheet, Liquidity, Sentiment, Cross-Reference |
+| **Secure Authentication** | Built-in MongoDB User Authentication, JWT tokens, and 15-minute session timeouts |
 | **LLM-agnostic** | Any OpenAI-compatible endpoint — LM Studio, Ollama, GPT-4, Claude via OpenRouter |
 | **Dark / Light mode** | Full theme toggle with amber accent palette |
 | **Font scaling** | 0.8× → 1.4× slider scales all UI text uniformly |
+| **Agent Transparency** | Live execution logs and guardrail constraints shown natively in the UI |
 | **Basel III context** | Pillar 2 / 3 alignment page for regulatory narrative |
 | **CLI mode** | Run the OCR pipeline headlessly without the UI |
 
@@ -146,12 +148,42 @@ All settings are configurable at runtime from the sidebar — no `.env` file nee
 |---------|---------|-------|
 | **LLM Base URL** | `http://127.0.0.1:1234/v1` | LM Studio local endpoint |
 | **Model** | `qwen2.5-coder-1.5b-instruct-mlx` | Any OpenAI-compatible model name |
-| **API Key** | `local` | Set to real key for cloud LLMs |
-| **NewsAPI Key** | *(empty)* | Free key at newsapi.org |
-| **FMP Key** | *(empty)* | Free 250 req/day at financialmodelingprep.com |
-| **Alpha Vantage Key** | *(empty)* | Free 25 req/day at alphavantage.co |
 
-> Sentiment Agent is gracefully skipped if no NewsAPI key is provided. FMP/AV keys are optional and only used for supplemental gap-filling.
+### Required Environment Variables (`.env`)
+The system now enforces restricted access. Instead of dumping API keys in the sidebar, FinVeritas now requires a `.env` file in the root `ocr/` directory:
+
+```env
+# SECURITY
+JWT_SECRET=your_super_secret_key
+MONGO_URI=mongodb+srv://admin:...
+
+# COMMUNICATIONS (OTP)
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_app_password
+
+# AGENT APIS
+NEWSAPI_KEY=your_news_key
+FMP_API_KEY=your_fmp_key
+LLM_API_KEY=local
+LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1
+LLM_MODEL=qwen2.5-coder-1.5b-instruct-mlx
+```
+
+> The Sentiment Agent is gracefully skipped if `NEWSAPI_KEY` is completely missing.
+
+---
+
+## Authentication & Security System 🔐
+
+FinVeritas employs a strict, enterprise-grade authentication loop to protect financial pipelines:
+
+1. **MongoDB Integration:** All registered users are isolated inside our cloud MongoDB schema.
+2. **Email OTP Verification:** Registration features an authenticated SMTP gateway to send secure 6-digit One Time Passwords (OTPs).
+3. **JWT Session State:** Logins generate a signed JSON Web Token (JWT) that manages the user's active session.
+4. **Auto-timeout:** For security, the system actively tracks mouse movements. 15 minutes of inactivity immediately destroys the JWT and securely re-routes the user back to the login wall.
+5. **Route Guarding:** Absolute path navigation is blocked; you cannot visit `/analysis` without explicitly completing the `/upload` OCR workflow first.
 
 ---
 
@@ -202,8 +234,8 @@ Generates a single integrated narrative summary cross-referencing revenue, balan
 | Page | What's on it |
 |------|-------------|
 | **Upload Statement** | Data source tabs, credibility score card, smart readiness alert, Run Analysis button |
-| **Agent Workflow** | Interactive pipeline diagram; hover nodes to see live agent outputs |
-| **Financial Analysis** | Full metrics + LLM narrative per agent, raw JSON audit trail |
+| **Agent Workflow** | Interactive pipeline diagram layered above the Agent Transparency & Guardrails panel |
+| **Financial Analysis** | Full metrics + LLM narrative per agent, nicely formatted raw JSON audit trail |
 | **Basel III Alignment** | Pillar 2/3 regulatory context; maps system outputs to supervisory expectations |
 
 ---
@@ -323,7 +355,8 @@ FinVeritas is **not** a regulatory reporting tool. It does not compute capital a
 |--------|---------|
 | `main` | Stable production branch |
 | `ASSHUL` | Base feature integration |
-| `avi` | UI revamp — FinVeritas rebranding, theme system, credibility engine |
+| `avi` | UI Revamp — FinVeritas rebranding, theme system, credibility engine |
+| `final` | **CURRENT BRANCH:** Core authentication loop, .env pipeline, guardrails, and completely polished UI |
 
 ---
 
