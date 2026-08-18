@@ -29,6 +29,8 @@ from src.yfinance_ingestion import fetch_by_ticker
 from src.private_company_ingestion import load_private_company_data, get_template_csv
 from src.supplemental_fetchers import auto_fetch_missing_fields
 from src.data_verifier import run_verification, CredibilityReport, STATUS_PASS, STATUS_WARN, STATUS_FAIL, STATUS_SKIP
+from src.fact_ledger import build_fact_ledger, summarize_ledger
+from src.anomaly_alerts import run_anomaly_detection
 from ui.dashboard_components import (
     agent_tooltip_html,
     inject_theme_vars,
@@ -448,6 +450,31 @@ def _run_agent_pipeline(
         "entity": entity, "revenue": rev_out, "liquidity": liq_out,
         "balance_sheet": bs_out, "sentiment": sentiment_out, "cross_reference": cross_out,
     }
+
+    # ── V2: Build Immutable Fact Ledger + Anomaly Detection ───────────────
+    try:
+        _cached = st.session_state.get("ocr_cache", {})
+        _src_type = {
+            "pdf": "bloomberg_pdf", "ticker": "ticker", "csv": "csv"
+        }.get((_cached.get("cache_key") or ("csv",))[0], "csv")
+        _src_label = _cached.get("source_label", "—")
+        _payload_for_ledger = _cached.get("payload") or payload
+
+        fact_ledger = build_fact_ledger(
+            payload=_payload_for_ledger,
+            source_type=_src_type,
+            source_label=_src_label,
+        )
+        anomaly_report = run_anomaly_detection(fact_ledger)
+
+        st.session_state["v2_fact_ledger"] = fact_ledger
+        st.session_state["v2_anomaly_report"] = anomaly_report
+        st.session_state["v2_ledger_summary"] = summarize_ledger(fact_ledger)
+    except Exception:
+        import traceback
+        st.session_state["v2_fact_ledger"] = None
+        st.session_state["v2_anomaly_report"] = None
+        st.session_state["v2_ledger_summary"] = None
 
     # ── Save to MongoDB file history ──────────────────────────────────────────
     try:
@@ -962,6 +989,248 @@ def page_analysis() -> None:
             st.json(outputs.get(key, {}))
 
 
+# ── Page V2 Intelligence ──────────────────────────────────────────────────────
+
+def page_v2_intelligence() -> None:
+    render_section_header("V2 Intelligence Dashboard", subtitle="Deterministic Metrics Engine · Immutable Fact Ledger · Anomaly Alerts")
+
+    ledger = st.session_state.get("v2_fact_ledger")
+    anomaly_report = st.session_state.get("v2_anomaly_report")
+    ledger_summary = st.session_state.get("v2_ledger_summary")
+
+    if not ledger:
+        if not st.session_state.get("agent_outputs"):
+            st.warning("⚠️ Please run analysis first from the **Upload Statement** page.")
+        else:
+            st.warning("⚠️ V2 Fact Ledger could not be generated. Check data completeness.")
+        return
+
+    # ── Entity & Coverage Bar ─────────────────────────────────────────────
+    entity_name = ledger.get("entity", {}).get("entity_id", "—")
+    period_info = ledger.get("period_coverage", {})
+    periods = period_info.get("periods", [])
+    avail = ledger.get("availability", {})
+    avail_count = sum(1 for v in avail.values() if v)
+    total_cats = len(avail)
+
+    st.markdown(f'''
+    <div style="background:linear-gradient(135deg,#0D1117 0%,#161B22 100%);border:1px solid #30363D;border-radius:8px;padding:20px;margin-bottom:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+            <div>
+                <div style="color:#7A7D96;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Entity</div>
+                <div style="color:#FFB000;font-size:20px;font-weight:700;letter-spacing:0.02em;">{html.escape(entity_name.upper())}</div>
+            </div>
+            <div>
+                <div style="color:#7A7D96;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Periods</div>
+                <div style="color:#E6EDF3;font-size:14px;font-weight:600;">{periods[0] if periods else "—"} → {periods[-1] if periods else "—"} ({len(periods)} periods)</div>
+            </div>
+            <div>
+                <div style="color:#7A7D96;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Intelligence Categories</div>
+                <div style="color:#00FF88;font-size:14px;font-weight:600;">{avail_count} / {total_cats} Active</div>
+            </div>
+            <div>
+                <div style="color:#7A7D96;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Computed At</div>
+                <div style="color:#8B949E;font-size:12px;">{ledger.get("computed_at", "—")[:19]}</div>
+            </div>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # ── Headline Metrics Cards ────────────────────────────────────────────
+    if ledger_summary and ledger_summary.get("headlines"):
+        headlines = ledger_summary["headlines"]
+        cols = st.columns(min(len(headlines), 6))
+        for i, hl in enumerate(headlines[:6]):
+            val = hl.get("value")
+            fmt = hl.get("format", "")
+            if val is not None:
+                if fmt == "pct":
+                    display_val = f"{val:+.1f}%" if val != 0 else "0.0%"
+                    color = "#00FF88" if val > 0 else "#FF4444" if val < 0 else "#8B949E"
+                elif fmt == "ratio":
+                    display_val = f"{val:.2f}x"
+                    color = "#00BFFF"
+                else:
+                    display_val = f"{val}"
+                    color = "#E6EDF3"
+            else:
+                display_val = "N/A"
+                color = "#444"
+
+            with cols[i % len(cols)]:
+                st.markdown(f'''
+                <div style="background:#161B22;border:1px solid #30363D;border-radius:6px;padding:14px;text-align:center;">
+                    <div style="color:#7A7D96;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">{html.escape(hl.get("label", ""))}</div>
+                    <div style="color:{color};font-size:22px;font-weight:700;">{display_val}</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+    render_hr()
+
+    # ── Anomaly Alerts ────────────────────────────────────────────────────
+    if anomaly_report:
+        summary = anomaly_report.get("summary", {})
+        health = summary.get("health_status", "UNKNOWN")
+        health_colors = {
+            "HEALTHY": ("#00FF88", "#0D2818"),
+            "MONITORING": ("#FFB000", "#1A1400"),
+            "CAUTION": ("#FF8800", "#1A0F00"),
+            "AT RISK": ("#FF4444", "#1A0000"),
+        }
+        h_color, h_bg = health_colors.get(health, ("#8B949E", "#161B22"))
+
+        render_section_header("Anomaly Detection", subtitle="Deterministic PASS/WARN/FAIL structural risk monitoring")
+
+        st.markdown(f'''
+        <div style="background:{h_bg};border:1px solid {h_color};border-left:4px solid {h_color};border-radius:6px;padding:16px;margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <span style="color:{h_color};font-size:16px;font-weight:700;">{health}</span>
+                    <span style="color:#7A7D96;font-size:12px;margin-left:12px;">
+                        {summary.get("critical", 0)} Critical · {summary.get("warnings", 0)} Warnings · {summary.get("total", 0)} Total Checks
+                    </span>
+                </div>
+                <div style="color:#7A7D96;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;">Structural Health</div>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+        alerts = anomaly_report.get("alerts", [])
+        if alerts:
+            for alert in alerts:
+                sev = alert.get("severity", "INFO")
+                sev_colors = {"CRITICAL": "#FF4444", "WARN": "#FFB000", "INFO": "#00BFFF"}
+                sev_icons = {"CRITICAL": "🔴", "WARN": "🟡", "INFO": "🔵"}
+                sc = sev_colors.get(sev, "#8B949E")
+                si = sev_icons.get(sev, "⚪")
+
+                st.markdown(f'''
+                <div style="background:#0D1117;border:1px solid #30363D;border-left:3px solid {sc};border-radius:4px;padding:12px;margin-bottom:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span>{si}</span>
+                        <span style="color:{sc};font-weight:700;font-size:11px;text-transform:uppercase;min-width:70px;">{sev}</span>
+                        <span style="color:#E6EDF3;font-size:13px;">{html.escape(alert.get("message", ""))}</span>
+                    </div>
+                    <div style="color:#7A7D96;font-size:10px;margin-top:4px;margin-left:28px;">
+                        Category: {html.escape(alert.get("category", ""))} · Metric: {html.escape(alert.get("metric", ""))}
+                    </div>
+                </div>
+                ''', unsafe_allow_html=True)
+        else:
+            st.markdown('''
+            <div style="background:#0D2818;border:1px solid #00FF88;border-radius:6px;padding:16px;text-align:center;">
+                <span style="color:#00FF88;font-size:14px;font-weight:600;">✓ No anomalies detected — all structural checks passed</span>
+            </div>
+            ''', unsafe_allow_html=True)
+
+        render_hr()
+
+    # ── 12-Category Intelligence Grid ─────────────────────────────────────
+    render_section_header("12-Category Financial Intelligence", subtitle="Deterministic Python-computed metrics — LLM involvement: NONE")
+
+    metrics_data = ledger.get("metrics", {})
+
+    category_config = [
+        ("revenue_intelligence", "Revenue Intelligence", "📈", "#FFB000"),
+        ("cost_intelligence", "Cost Intelligence", "💰", "#FF6B35"),
+        ("profitability_intelligence", "Profitability Intelligence", "📊", "#00FF88"),
+        ("liquidity_intelligence", "Liquidity Intelligence", "💧", "#00BFFF"),
+        ("solvency_intelligence", "Solvency Intelligence", "🏛️", "#CC88FF"),
+        ("debt_servicing_intelligence", "Debt Servicing Intelligence", "🔗", "#FF4444"),
+        ("efficiency_intelligence", "Efficiency Intelligence", "⚡", "#FFD700"),
+        ("return_intelligence", "Return Intelligence", "🎯", "#00FF88"),
+        ("cash_flow_intelligence", "Cash Flow Intelligence", "💵", "#00BFFF"),
+        ("growth_intelligence", "Growth Intelligence", "🚀", "#FFB000"),
+        ("trend_intelligence", "Trend Intelligence", "📉", "#CC88FF"),
+        ("risk_intelligence", "Risk Intelligence", "🛡️", "#FF4444"),
+    ]
+
+    # Render in 2-column grid
+    for row_start in range(0, len(category_config), 2):
+        cols = st.columns(2)
+        for col_idx in range(2):
+            cat_idx = row_start + col_idx
+            if cat_idx >= len(category_config):
+                break
+            key, label, icon, color = category_config[cat_idx]
+            cat_data = metrics_data.get(key, {})
+            is_available = cat_data.get("available", False)
+
+            with cols[col_idx]:
+                status_badge = f'<span style="color:#00FF88;font-size:9px;">● ACTIVE</span>' if is_available else f'<span style="color:#444;font-size:9px;">○ NO DATA</span>'
+
+                st.markdown(f'''
+                <div style="background:#0D1117;border:1px solid #30363D;border-top:2px solid {color};border-radius:6px;padding:16px;margin-bottom:12px;min-height:120px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <span style="color:{color};font-size:13px;font-weight:700;">{icon} {label}</span>
+                        {status_badge}
+                    </div>
+                ''', unsafe_allow_html=True)
+
+                if is_available:
+                    # Render key metrics for this category
+                    display_items = {k: v for k, v in cat_data.items() if k not in ("available", "flags", "summary")}
+                    if key == "risk_intelligence":
+                        # Special rendering for risk
+                        risk_sum = cat_data.get("summary", {})
+                        st.markdown(f'''
+                        <div style="color:#E6EDF3;font-size:12px;line-height:1.8;">
+                            ✅ Pass: <strong>{risk_sum.get("pass_count", 0)}</strong> &nbsp;
+                            ⚠️ Warn: <strong>{risk_sum.get("warn_count", 0)}</strong> &nbsp;
+                            ❌ Fail: <strong>{risk_sum.get("fail_count", 0)}</strong>
+                        </div>
+                        ''', unsafe_allow_html=True)
+                    else:
+                        metric_lines = []
+                        for mk, mv in display_items.items():
+                            display_name = mk.replace("_", " ").replace(" pct", " %").replace(" latest", "").title()
+                            if isinstance(mv, float):
+                                if "pct" in mk or "margin" in mk or "growth" in mk or "roe" in mk or "roa" in mk or "roce" in mk:
+                                    metric_lines.append(f"<span style='color:#7A7D96;'>{display_name}:</span> <span style='color:#E6EDF3;'>{mv:+.2f}%</span>")
+                                else:
+                                    metric_lines.append(f"<span style='color:#7A7D96;'>{display_name}:</span> <span style='color:#E6EDF3;'>{mv:.4f}</span>")
+                            elif isinstance(mv, str):
+                                t_color = "#00FF88" if mv == "increasing" else "#FF4444" if mv == "declining" else "#8B949E"
+                                metric_lines.append(f"<span style='color:#7A7D96;'>{display_name}:</span> <span style='color:{t_color};'>{mv}</span>")
+
+                        if metric_lines:
+                            st.markdown(
+                                '<div style="font-size:11px;line-height:1.9;">'
+                                + '<br>'.join(metric_lines[:8])
+                                + ('</div>' if len(metric_lines) <= 8 else f'<br><span style="color:#7A7D96;">... +{len(metric_lines)-8} more</span></div>'),
+                                unsafe_allow_html=True,
+                            )
+                else:
+                    st.markdown('<div style="color:#444;font-size:11px;font-style:italic;">Insufficient data for this category. Upload more complete financial statements to activate.</div>', unsafe_allow_html=True)
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+    render_hr()
+
+    # ── Source Traceability ────────────────────────────────────────────────
+    render_section_header("Source Traceability", subtitle="Immutable Fact Ledger audit trail")
+    source_meta = ledger.get("source_metadata", {})
+    st.markdown(f'''
+    <div style="background:#0D1117;border:1px solid #30363D;border-radius:6px;padding:16px;">
+        <div style="font-size:11px;line-height:2;color:#8B949E;">
+            <span style="color:#7A7D96;">Source Type:</span> <span style="color:#E6EDF3;">{html.escape(str(source_meta.get("source_type", "—")))}</span><br>
+            <span style="color:#7A7D96;">Source Label:</span> <span style="color:#E6EDF3;">{html.escape(str(source_meta.get("source_label", "—")))}</span><br>
+            <span style="color:#7A7D96;">Computation Engine:</span> <span style="color:#00FF88;">{html.escape(str(source_meta.get("computation_engine", "—")))}</span><br>
+            <span style="color:#7A7D96;">LLM Involvement:</span> <span style="color:#FFB000;font-weight:700;">{html.escape(str(source_meta.get("llm_involvement", "—")))}</span><br>
+            <span style="color:#7A7D96;">Ledger Version:</span> <span style="color:#E6EDF3;">{ledger.get("ledger_version", "—")}</span><br>
+            <span style="color:#7A7D96;">Immutable:</span> <span style="color:#00FF88;">{'✓ YES' if ledger.get('immutable') else '✗ NO'}</span>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    render_hr()
+
+    # ── Raw Fact Ledger JSON ───────────────────────────────────────────────
+    render_section_header("Raw Fact Ledger", subtitle="Full immutable JSON — audit trail")
+    with st.expander("View Full Fact Ledger JSON"):
+        st.json(ledger)
+
+
 # ── Page 4 ────────────────────────────────────────────────────────────────────
 
 def page_basel() -> None:
@@ -1112,6 +1381,7 @@ def main() -> None:
         _nav_options = [
             "Upload Statement",
             "Financial Analysis",
+            "V2 Intelligence",
             "Agent Workflow",
             "Basel III Alignment",
             "My File History",
@@ -1172,6 +1442,8 @@ def main() -> None:
                     fmp_api_key=fmp_api_key, av_api_key=av_api_key)
     elif "Workflow" in page:
         page_workflow()
+    elif page == "V2 Intelligence":
+        page_v2_intelligence()
     elif "Analysis" in page:
         page_analysis()
     elif "Basel" in page:
