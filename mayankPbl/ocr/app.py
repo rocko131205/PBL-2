@@ -20,8 +20,7 @@ from streamlit_agraph import Config, Edge, Node, agraph
 from src.revenue_calculator import calculate_revenue_metrics
 from src.balance_sheet_calculator import calculate_balance_sheet_metrics
 from src.liquidity_calculator import calculate_liquidity_metrics
-from src.saas_engine import compute_saas_metrics
-from src.agent_workflow import finveritas_v2_app
+from src.agent_workflow import run_analysis
 from src.payload_mapper import payload_to_normalized_record
 from src.schema import DSCRInputs
 from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
@@ -382,9 +381,9 @@ def _run_agent_pipeline(
     api_key: str,
     news_api_key: str,
 ) -> None:
-    """Run V2 Agent Pipeline: Deterministic Calculators + Data Sufficiency Graph."""
-    
-    # 1. Deterministic Calculators (No LLM)
+    """Run V2 Agent Pipeline: Deterministic Calculators + Agentic Workflow."""
+
+    # 1. Deterministic Calculators (No LLM) — V1 calculators still run for backward compat
     rev_path = agent_paths["revenue"]
     bs_path  = agent_paths["balance_sheet"]
     liq_path = agent_paths["liquidity"]
@@ -395,55 +394,46 @@ def _run_agent_pipeline(
         liq_out = _safe_run("Liquidity Calculator", lambda: calculate_liquidity_metrics(json_path=liq_path))
         bs_out = _safe_run("Balance Sheet Calculator", lambda: calculate_balance_sheet_metrics(json_path=bs_path))
 
-    # 2. Data Sufficiency Workflow (LangGraph)
-    st.markdown("### Agent Orchestration")
-    with st.spinner("Evaluating Data Sufficiency Workflow..."):
-        record = payload_to_normalized_record(payload)
-        
-        # We will retrieve DSCR inputs from session state if the user has provided them
-        dscr_inputs_dict = st.session_state.get("dscr_user_inputs")
-        dscr_inputs = None
-        if dscr_inputs_dict:
-            try:
-                dscr_inputs = DSCRInputs(**dscr_inputs_dict)
-            except Exception:
-                pass
-                
-        initial_state = {
-            "company_record": record,
-            "dscr_inputs": dscr_inputs,
-            "missing_fields": [],
-            "requires_human_input": False,
-            "human_input_prompt": "",
-            "dscr_ratio": None,
-            "saas_metrics": None,
-            "peers": None,
-            "credit_risk_report": None,
-            "llm_config": {
-                "base_url": base_url,
-                "model": model,
-                "api_key": api_key
-            }
-        }
-        
-        # Run LangGraph
-        result_state = finveritas_v2_app.invoke(initial_state)
-    
-    # Save results to session state
+    # 2. V2 Agentic Workflow (Company Intelligence → Financial Computation → Peer Analysis → Credit Assessment)
+    st.markdown("### V2 Agentic Orchestration")
+
+    # Determine source type from active session
+    active_source = st.session_state.get("active_source", "pdf")
+    source_type_map = {"pdf": "bloomberg_pdf", "ticker": "ticker", "csv": "csv"}
+    source_type = source_type_map.get(active_source, "unknown")
+
+    # Retrieve DSCR inputs from session state if user has provided them
+    dscr_inputs_dict = st.session_state.get("dscr_user_inputs") or {}
+
+    with st.spinner("Running V2 Agentic Analysis Pipeline..."):
+        try:
+            result_state = run_analysis(
+                payload=payload,
+                source_type=source_type,
+                dscr_inputs=dscr_inputs_dict,
+                llm_base_url=base_url,
+                llm_model=model,
+                llm_api_key=api_key,
+            )
+        except Exception as e:
+            st.error(f"Error running V2 analysis: {e}")
+            import traceback
+            st.code(traceback.format_exc(), language="text")
+            result_state = {"errors": [str(e)]}
+
+    # Save results to session state — V2 structure
     st.session_state["agent_outputs"] = {
         "entity": entity,
         "revenue": rev_out,
         "liquidity": liq_out,
         "balance_sheet": bs_out,
         "workflow_state": result_state,
-        "saas_metrics": compute_saas_metrics(record)
     }
 
-    if result_state["requires_human_input"]:
-        st.warning(f"⚠️ Agent Paused: {result_state['human_input_prompt']}")
-        st.info("Please navigate to the **Financial Analysis** section to provide the missing debt information.")
-    else:
-        st.success("✅ **Analysis complete!** You can now navigate to the **Financial Analysis** section in the sidebar.")
+    if result_state.get("errors"):
+        err_list = result_state["errors"]
+        st.warning(f"⚠️ Pipeline completed with {len(err_list)} warning(s). Results may be partial.")
+    st.success("✅ **Analysis complete!** Navigate to **Financial Analysis** in the sidebar.")
 
 
 def _render_agent_status_badges(payload: dict[str, Any], news_api_key: str) -> None:
@@ -879,10 +869,8 @@ def page_workflow() -> None:
         st.markdown('<div style="color:#444;font-size:11px;margin-top:12px;">▸ Run analysis on the Upload page to view agent constraints.</div>', unsafe_allow_html=True)
 
 
-# ── Page 3 ────────────────────────────────────────────────────────────────────
-
 def page_analysis() -> None:
-    render_section_header("Financial Analysis Output", subtitle="Deterministic metrics & Credit Assessment")
+    render_section_header("Financial Analysis Output", subtitle="V2 Deterministic Metrics & Credit Assessment")
 
     outputs = st.session_state.get("agent_outputs")
     if not outputs:
@@ -893,197 +881,366 @@ def page_analysis() -> None:
         return
 
     entity = outputs.get("entity", "—")
-    st.markdown(f'<div style="font-size:13px;color:#7A7D96;margin-bottom:24px;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid #1E2030;padding-bottom:12px;">Entity: <strong style="color:#FFB000;font-size:14px;">{entity.upper()}</strong></div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-size:13px;color:#7A7D96;margin-bottom:24px;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid #1E2030;padding-bottom:12px;">Entity: <strong style="color:#FFB000;font-size:14px;">{html.escape(entity.upper())}</strong></div>', unsafe_allow_html=True)
 
     workflow_state = outputs.get("workflow_state", {})
+
+    # ── V2 DSCR Input Form (if no DSCR inputs provided yet) ───────────────
+    dscr_inputs = st.session_state.get("dscr_user_inputs")
+    dscr_result_data = workflow_state.get("dscr_result")
     
-    if workflow_state.get("requires_human_input"):
-        st.error(f"🛑 Data Sufficiency Check Failed")
-        st.warning(workflow_state["human_input_prompt"])
-        
-        st.markdown("### Manual DSCR Input Form")
+    if dscr_result_data and dscr_result_data.get("dscr_ratio") is None and not dscr_inputs:
+        st.info("💡 **DSCR requires debt service information.** Provide loan details below to compute DSCR.")
         with st.form("dscr_form"):
-            e_prin = st.number_input("Existing Loan Principal Repayment (Annual)", min_value=0.0, value=0.0)
-            e_int = st.number_input("Existing Loan Interest (Annual)", min_value=0.0, value=0.0)
-            p_prin = st.number_input("Proposed Loan Principal Repayment (Annual)", min_value=0.0, value=0.0)
-            p_int = st.number_input("Proposed Loan Interest (Annual)", min_value=0.0, value=0.0)
-            
-            if st.form_submit_button("Submit Debt Data and Resume Analysis"):
+            st.markdown("#### Debt Service Inputs")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.markdown("**Existing Debt**")
+                e_prin = st.number_input("Annual Principal Repayment", min_value=0.0, value=0.0, key="dscr_e_prin")
+                e_int = st.number_input("Annual Interest Payment", min_value=0.0, value=0.0, key="dscr_e_int")
+            with col_b:
+                st.markdown("**Proposed New Debt**")
+                p_amount = st.number_input("Loan Amount", min_value=0.0, value=0.0, key="dscr_p_amount")
+                p_rate = st.number_input("Interest Rate (%)", min_value=0.0, value=0.0, key="dscr_p_rate")
+                p_tenure = st.number_input("Tenure (Years)", min_value=0.0, value=0.0, key="dscr_p_tenure")
+
+            if st.form_submit_button("Submit Debt Data and Recalculate"):
                 st.session_state["dscr_user_inputs"] = {
                     "existing_loan_principal_repayment": e_prin,
                     "existing_loan_interest": e_int,
-                    "proposed_loan_principal_repayment": p_prin,
-                    "proposed_loan_interest": p_int
+                    "proposed_loan_amount": p_amount,
+                    "proposed_interest_rate": p_rate,
+                    "proposed_tenure_years": p_tenure,
                 }
-                # User will need to click re-run from the first page or we can orchestrate it automatically
-                st.success("Debt metrics saved! Please go back to the Upload page and click Run Full Analysis again.")
+                st.success("Debt metrics saved! Go back to Upload page and click **RUN FULL ANALYSIS** again.")
                 st.stop()
-        return
 
+    # ── Layout: Two columns ───────────────────────────────────────────────
     c1, c2 = st.columns(2)
+
     with c1:
-        render_section_header("Revenue & SaaS", subtitle="Income Statement & SaaS Metrics")
-        
-        saas_metrics = outputs.get("saas_metrics", {})
-        if saas_metrics:
-            gr = saas_metrics.get("growth_rate_pct", 0)
-            pm = saas_metrics.get("profit_margin_pct", 0)
-            r40 = saas_metrics.get("rule_of_40", 0)
-            is_healthy = saas_metrics.get("is_healthy", False)
-            color = "#00FF88" if is_healthy else "#FF6B35"
-            status = "HEALTHY" if is_healthy else "NEEDS IMPROVEMENT"
-            
-            saas_html = f"""
-            <div class="bb-agent-card">
-                <div class="bb-agent-card-title">SaaS Rule of 40</div>
-                <div class="bb-metric-row">
-                    <span class="bb-mkey">Growth Rate</span>
-                    <span class="bb-mval">{gr:.2f}%</span>
-                </div>
-                <div class="bb-metric-row">
-                    <span class="bb-mkey">Profit Margin Proxy</span>
-                    <span class="bb-mval">{pm:.2f}%</span>
-                </div>
-                <div class="bb-metric-row" style="margin-top:8px;border-top:1px solid #1E2030;padding-top:8px;">
-                    <span class="bb-mkey" style="color:{color};">Rule of 40 Score</span>
-                    <span class="bb-mval" style="color:{color};font-weight:bold;">{r40:.2f} ({status})</span>
-                </div>
-            </div>
-            """
-            st.markdown(saas_html, unsafe_allow_html=True)
-            
+        # ── Revenue & SaaS Metrics ────────────────────────────────────────
+        render_section_header("Revenue & SaaS Intelligence", subtitle="V2 Fact Ledger")
+
+        # V2: Render SaaS metrics from fact ledger
+        fact_ledger_data = workflow_state.get("fact_ledger")
+        if fact_ledger_data:
+            saas_entries = [e for e in fact_ledger_data.get("entries", []) if e.get("category") == "saas"]
+            if saas_entries:
+                saas_html = '<div class="bb-agent-card"><div class="bb-agent-card-title">SaaS Metrics (Actual Data)</div>'
+                for entry in saas_entries:
+                    val = entry.get("value")
+                    name = entry.get("display_name", entry.get("metric", ""))
+                    unit = entry.get("unit", "")
+                    status = entry.get("status", "")
+                    risk = entry.get("risk_signal")
+                    risk_detail = entry.get("risk_detail", "")
+
+                    val_color = "#E6E6E6"
+                    if risk == "PASS": val_color = "#00FF88"
+                    elif risk == "WARN": val_color = "#FFB000"
+                    elif risk == "FAIL": val_color = "#FF3333"
+
+                    if val is not None:
+                        display_val = f"{val:.2f}{unit}" if unit == "%" else f"{val:.2f} {unit}"
+                    elif status == "INSUFFICIENT_DATA":
+                        display_val = "Insufficient Data"
+                        val_color = "#666"
+                    else:
+                        display_val = "N/A"
+                        val_color = "#666"
+
+                    saas_html += f'''
+                    <div class="bb-metric-row">
+                        <span class="bb-mkey">{html.escape(name)}</span>
+                        <span class="bb-mval" style="color:{val_color};">{html.escape(str(display_val))}</span>
+                    </div>'''
+                    if risk_detail:
+                        saas_html += f'<div style="font-size:10px;color:#7A7D96;margin:-4px 0 6px 0;padding-left:12px;">{html.escape(risk_detail)}</div>'
+
+                saas_html += '</div>'
+                st.markdown(saas_html, unsafe_allow_html=True)
+                
+                with st.expander("SaaS Metrics Methodology"):
+                    st.markdown("**Formulas & Logic:**")
+                    for entry in saas_entries:
+                        st.markdown(f"- **{entry.get('display_name')}**: {entry.get('formula')}")
+
+        # V1 Revenue Calculator output (backward compat)
         render_agent_card("Revenue Calculator", outputs.get("revenue", {}), css_variant="", icon="◆")
         
-        peers = workflow_state.get("peers")
-        if peers:
-            render_section_header("Quantitative Peer Benchmarking", subtitle="Dynamically Estimated by LLM")
-            
-            target_gr = saas_metrics.get("growth_rate_pct", 0) if saas_metrics else 0
-            target_pm = saas_metrics.get("profit_margin_pct", 0) if saas_metrics else 0
-            target_r40 = saas_metrics.get("rule_of_40", 0) if saas_metrics else 0
-            
-            peers_html = f"""<div class="bb-agent-card" style="padding: 0; overflow-x: auto;">
-<table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+        # ── V2 Profitability Metrics ───────────────────────────
+        if fact_ledger_data:
+            profit_entries = [e for e in fact_ledger_data.get("entries", []) if e.get("category") == "profitability"]
+            if profit_entries:
+                cat_html = f'<div class="bb-agent-card" style="margin-top:12px;"><div class="bb-agent-card-title">Profitability Metrics</div>'
+                for entry in profit_entries:
+                    val = entry.get("value")
+                    name = entry.get("display_name", "")
+                    unit = entry.get("unit", "")
+                    risk = entry.get("risk_signal")
+                    val_color = "#E6E6E6"
+                    if risk == "PASS": val_color = "#00FF88"
+                    elif risk == "WARN": val_color = "#FFB000"
+                    elif risk == "FAIL": val_color = "#FF3333"
+
+                    if val is not None:
+                        display_val = f"{val:.2f}{unit}" if unit in ("%",) else f"{val:,.2f} {unit}"
+                    else:
+                        display_val = "N/A"
+                        val_color = "#666"
+
+                    cat_html += f'''<div class="bb-metric-row">
+                        <span class="bb-mkey">{html.escape(name)}</span>
+                        <span class="bb-mval" style="color:{val_color};">{html.escape(display_val)}</span>
+                    </div>'''
+                cat_html += '</div>'
+                st.markdown(cat_html, unsafe_allow_html=True)
+                
+                with st.expander("Profitability Methodology Details"):
+                    st.markdown("**Formulas & Logic:**")
+                    for entry in profit_entries:
+                        st.markdown(f"- **{entry.get('display_name')}**: {entry.get('formula')}")
+
+        # ── V2 Peer Comparison (actual data, not hallucinated) ────────────
+        peer_data = workflow_state.get("peer_comparison")
+        if peer_data and peer_data.get("peers"):
+            peers = peer_data["peers"]
+            render_section_header("Peer Benchmarking", subtitle="Data from yfinance (actual, not estimated)")
+
+            peers_html = f'''<div class="bb-agent-card" style="padding: 0; overflow-x: auto;">
+<div style="padding:8px 12px;font-size:10px;color:#00FF88;background:#001A0D;border-bottom:1px solid #1E2030;">
+✓ All peer data fetched from live sources — no LLM-estimated values
+</div>
+<table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px;">
 <thead>
 <tr style="border-bottom: 1px solid #1E2030; background: #0B0C10;">
-<th style="padding: 12px; color: #7A7D96;">Company</th>
-<th style="padding: 12px; color: #7A7D96;">Annual Revenue (USD)</th>
-<th style="padding: 12px; color: #7A7D96;">Growth</th>
-<th style="padding: 12px; color: #7A7D96;">Margin</th>
-<th style="padding: 12px; color: #7A7D96;">Rule of 40</th>
+<th style="padding: 10px; color: #7A7D96;">Company</th>
+<th style="padding: 10px; color: #7A7D96;">Growth</th>
+<th style="padding: 10px; color: #7A7D96;">Op. Margin</th>
+<th style="padding: 10px; color: #7A7D96;">Gross Margin</th>
+<th style="padding: 10px; color: #7A7D96;">D/E</th>
 </tr>
 </thead>
-<tbody>
-<tr style="border-bottom: 1px solid #1E2030; background: #13141C;">
-<td style="padding: 12px; font-weight: bold; color: #FFB000;">TARGET <span style="font-size:11px; color:#7A7D96;">({entity})</span></td>
-<td style="padding: 12px; color: #E6E6E6;">—</td>
-<td style="padding: 12px; color: #E6E6E6;">{target_gr:.1f}%</td>
-<td style="padding: 12px; color: #E6E6E6;">{target_pm:.1f}%</td>
-<td style="padding: 12px; font-weight: bold; color: #00FF88;">{target_r40:.1f}</td>
-</tr>"""
+<tbody>'''
             for p in peers:
-                name = p.get('company_name', 'Unknown')
-                ticker = p.get('ticker', 'N/A')
-                rev = p.get('estimated_revenue_usd', 'N/A')
-                gr = p.get('estimated_growth_rate', 0)
-                pm = p.get('estimated_profit_margin', 0)
-                r40 = p.get('estimated_rule_of_40', 0)
-                delta = p.get('competitive_delta', '')
-                peers_html += f"""<tr style="border-bottom: 1px solid #1E2030;">
-<td style="padding: 12px;">
-<div style="color: #00BFFF; font-weight: bold;">{name} <span style="font-size:10px; background:#1E2030; padding:2px 4px; border-radius:3px; color:#9A9AB0;">{ticker}</span></div>
-<div style="font-size: 11px; color: #9A9AB0; margin-top: 4px;">{delta}</div>
+                name = p.get("entity_id", "Unknown")
+                ticker = p.get("ticker", "")
+                tier_badge = '<span style="font-size:9px;background:#003040;color:#00BFFF;padding:1px 4px;border-radius:2px;">PRIMARY</span>' if p.get("peer_tier") == "primary" else '<span style="font-size:9px;background:#1E2030;color:#7A7D96;padding:1px 4px;border-radius:2px;">SECONDARY</span>'
+
+                def _fmt(v, suffix="%"):
+                    return f"{v:.1f}{suffix}" if v is not None else "N/A"
+
+                peers_html += f'''<tr style="border-bottom: 1px solid #1E2030;">
+<td style="padding: 10px;">
+<div style="color: #00BFFF; font-weight: bold;">{html.escape(name)} <span style="font-size:10px;color:#7A7D96;">{html.escape(ticker)}</span></div>
+<div style="margin-top:2px;">{tier_badge}</div>
 </td>
-<td style="padding: 12px; color: #E6E6E6;">{rev}</td>
-<td style="padding: 12px; color: #E6E6E6;">{gr}%</td>
-<td style="padding: 12px; color: #E6E6E6;">{pm}%</td>
-<td style="padding: 12px; color: #CC88FF; font-weight:bold;">{r40}</td>
-</tr>"""
+<td style="padding: 10px; color: #E6E6E6;">{_fmt(p.get("revenue_growth"))}</td>
+<td style="padding: 10px; color: #E6E6E6;">{_fmt(p.get("operating_margin"))}</td>
+<td style="padding: 10px; color: #E6E6E6;">{_fmt(p.get("gross_margin"))}</td>
+<td style="padding: 10px; color: #E6E6E6;">{_fmt(p.get("debt_to_equity"), "x")}</td>
+</tr>'''
             peers_html += "</tbody></table></div>"
             st.markdown(peers_html, unsafe_allow_html=True)
-            
+
     with c2:
-        render_section_header("Credit Risk Assessment", subtitle="DSCR and Liquidity")
-        
-        dscr_inputs = st.session_state.get("dscr_user_inputs")
-        if dscr_inputs:
-            inputs_html = f"""
-            <div class="bb-agent-card" style="border-left: 4px solid #FFB000; margin-bottom: 16px;">
-                <div class="bb-agent-card-title" style="color:#FFB000;">User Debt Assumptions</div>
+        render_section_header("Credit Risk Assessment", subtitle="V2 DSCR & Risk Dashboard")
+
+        # ── DSCR Display ──────────────────────────────────────────────────
+        if dscr_result_data:
+            dscr_ratio = dscr_result_data.get("dscr_ratio")
+            risk_level = dscr_result_data.get("risk_level", "INSUFFICIENT_DATA")
+            methodology = dscr_result_data.get("methodology", {})
+            interpretation = dscr_result_data.get("interpretation", "")
+
+            risk_colors = {"LOW": "#00FF88", "MODERATE": "#FFB000", "HIGH": "#FF6B35", "CRITICAL": "#FF3333", "INSUFFICIENT_DATA": "#888"}
+            dscr_color = risk_colors.get(risk_level, "#888")
+
+            if dscr_ratio is not None:
+                dscr_html = f'''
+                <div class="bb-agent-card" style="border-left: 4px solid {dscr_color};">
+                    <div class="bb-agent-card-title" style="color:{dscr_color};">DSCR — Debt Service Coverage Ratio</div>
+                    <div class="bb-metric-row">
+                        <span class="bb-mkey" style="font-size:14px;color:{dscr_color};">DSCR Ratio</span>
+                        <span class="bb-mval" style="font-size:22px;color:{dscr_color};font-weight:bold;">{dscr_ratio:.2f}x</span>
+                    </div>
+                    <div class="bb-metric-row">
+                        <span class="bb-mkey">Risk Level</span>
+                        <span class="bb-mval" style="color:{dscr_color};font-weight:bold;">{risk_level}</span>
+                    </div>
+                    <div class="bb-metric-row">
+                        <span class="bb-mkey">Numerator ({html.escape(methodology.get("numerator_name", "N/A"))})</span>
+                        <span class="bb-mval">{dscr_result_data.get("numerator_value", 0):,.0f}</span>
+                    </div>
+                    <div class="bb-metric-row">
+                        <span class="bb-mkey">Total Debt Service</span>
+                        <span class="bb-mval">{dscr_result_data.get("denominator_value", 0):,.0f}</span>
+                    </div>
+                </div>'''
+                st.markdown(dscr_html, unsafe_allow_html=True)
+            else:
+                st.markdown(f'''
+                <div class="bb-agent-card" style="border-left: 4px solid #888;">
+                    <div class="bb-agent-card-title" style="color:#888;">DSCR — Insufficient Data</div>
+                    <div style="font-size:12px;color:#9A9AB0;line-height:1.6;">{html.escape(interpretation)}</div>
+                </div>''', unsafe_allow_html=True)
+
+            # DSCR Methodology transparency
+            if methodology:
+                with st.expander("DSCR Methodology Details"):
+                    st.markdown(f"**Numerator**: {methodology.get('numerator_name', 'N/A')} — {methodology.get('numerator_formula', '')}")
+                    st.markdown(f"**Source**: {methodology.get('numerator_source', 'N/A')}")
+                    st.markdown(f"**Time Period**: {methodology.get('time_period', 'N/A')}")
+                    if methodology.get("denominator_components"):
+                        st.markdown("**Debt Service Components**:")
+                        for comp in methodology["denominator_components"]:
+                            st.markdown(f"- {comp}")
+                    if methodology.get("assumptions"):
+                        st.markdown("**Assumptions**:")
+                        for a in methodology["assumptions"]:
+                            st.markdown(f"- {a}")
+                    if methodology.get("limitations"):
+                        st.markdown("**Limitations**:")
+                        for l in methodology["limitations"]:
+                            st.markdown(f"- ⚠️ {l}")
+
+        # ── Risk Dashboard ────────────────────────────────────────────────
+        risk_data = workflow_state.get("risk_dashboard")
+        if risk_data:
+            overall = risk_data.get("overall_risk", "MODERATE")
+            fail_ct = risk_data.get("fail_count", 0)
+            warn_ct = risk_data.get("warn_count", 0)
+            indicators = risk_data.get("indicators", [])
+
+            risk_colors = {"LOW": "#00FF88", "MODERATE": "#FFB000", "HIGH": "#FF6B35", "CRITICAL": "#FF3333"}
+            overall_color = risk_colors.get(overall, "#888")
+
+            risk_html = f'''
+            <div class="bb-agent-card" style="border-left: 4px solid {overall_color}; margin-top:16px;">
+                <div class="bb-agent-card-title" style="color:{overall_color};">Risk Dashboard — Overall: {overall}</div>
                 <div class="bb-metric-row">
-                    <span class="bb-mkey">Existing Principal</span>
-                    <span class="bb-mval">${dscr_inputs.get('existing_loan_principal_repayment', 0):,.2f}</span>
+                    <span class="bb-mkey" style="color:#FF3333;">FAIL Indicators</span>
+                    <span class="bb-mval" style="color:#FF3333;">{fail_ct}</span>
                 </div>
                 <div class="bb-metric-row">
-                    <span class="bb-mkey">Existing Interest</span>
-                    <span class="bb-mval">${dscr_inputs.get('existing_loan_interest', 0):,.2f}</span>
+                    <span class="bb-mkey" style="color:#FFB000;">WARN Indicators</span>
+                    <span class="bb-mval" style="color:#FFB000;">{warn_ct}</span>
                 </div>
-                <div class="bb-metric-row">
-                    <span class="bb-mkey">Proposed Principal</span>
-                    <span class="bb-mval">${dscr_inputs.get('proposed_loan_principal_repayment', 0):,.2f}</span>
-                </div>
-                <div class="bb-metric-row">
-                    <span class="bb-mkey">Proposed Interest</span>
-                    <span class="bb-mval">${dscr_inputs.get('proposed_loan_interest', 0):,.2f}</span>
-                </div>
-                <div class="bb-metric-row" style="margin-top:8px;border-top:1px solid #1E2030;padding-top:8px;">
-                    <span class="bb-mkey" style="color:#FFB000;">Total Debt Service (Denominator)</span>
-                    <span class="bb-mval" style="color:#FFB000;font-weight:bold;">${sum(dscr_inputs.values()):,.2f}</span>
-                </div>
-            </div>
-            """
-            st.markdown(inputs_html, unsafe_allow_html=True)
-            
-        dscr = workflow_state.get("dscr_ratio")
-        if dscr is not None:
-            st.markdown(f"""
-            <div class="bb-agent-card" style="border-left: 4px solid #00FF88;">
-                <div class="bb-metric-row">
-                    <span class="bb-mkey" style="font-size:14px;color:#00FF88;">DSCR Ratio</span>
-                    <span class="bb-mval" style="font-size:18px;color:#00FF88;font-weight:bold;">{dscr:,.2f}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("**DSCR Ratio**: N/A")
+            </div>'''
+            st.markdown(risk_html, unsafe_allow_html=True)
+
+            # Show individual indicators
+            if indicators:
+                with st.expander(f"View All Risk Indicators ({len(indicators)})"):
+                    for ind in indicators:
+                        status = ind.get("status", "SKIP")
+                        status_colors = {"PASS": "#00FF88", "WARN": "#FFB000", "FAIL": "#FF3333", "SKIP": "#888"}
+                        sc = status_colors.get(status, "#888")
+                        st.markdown(
+                            f'<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #1E2030;">'
+                            f'<span style="font-size:9px;font-weight:700;color:{sc};background:{sc}18;padding:1px 5px;border-radius:2px;letter-spacing:0.1em;white-space:nowrap;">{status}</span>'
+                            f'<div>'
+                            f'<span style="font-size:11px;color:#D8D8E0;font-weight:600;">{html.escape(ind.get("name", ""))}</span><br>'
+                            f'<span style="font-size:10px;color:#7A7D96;">{html.escape(ind.get("detail", ""))}</span>'
+                            f'</div></div>',
+                            unsafe_allow_html=True,
+                        )
+                        
+        # ── V2 Solvency Metrics ───────────────────────────
+        if fact_ledger_data:
+            solv_entries = [e for e in fact_ledger_data.get("entries", []) if e.get("category") == "solvency"]
+            if solv_entries:
+                cat_html = f'<div class="bb-agent-card" style="margin-top:12px;"><div class="bb-agent-card-title">Solvency & Leverage</div>'
+                for entry in solv_entries:
+                    val = entry.get("value")
+                    name = entry.get("display_name", "")
+                    unit = entry.get("unit", "")
+                    risk = entry.get("risk_signal")
+                    val_color = "#E6E6E6"
+                    if risk == "PASS": val_color = "#00FF88"
+                    elif risk == "WARN": val_color = "#FFB000"
+                    elif risk == "FAIL": val_color = "#FF3333"
+
+                    if val is not None:
+                        display_val = f"{val:.2f}{unit}" if unit in ("%",) else f"{val:,.2f} {unit}"
+                    else:
+                        display_val = "N/A"
+                        val_color = "#666"
+
+                    cat_html += f'''<div class="bb-metric-row">
+                        <span class="bb-mkey">{html.escape(name)}</span>
+                        <span class="bb-mval" style="color:{val_color};">{html.escape(display_val)}</span>
+                    </div>'''
+                cat_html += '</div>'
+                st.markdown(cat_html, unsafe_allow_html=True)
+                
+                with st.expander("Solvency Methodology Details"):
+                    st.markdown("**Formulas & Logic:**")
+                    for entry in solv_entries:
+                        st.markdown(f"- **{entry.get('display_name')}**: {entry.get('formula')}")
+
+        # ── V1 Backward-compat cards ──────────────────────────────────────
         render_agent_card("Liquidity Calculator", outputs.get("liquidity", {}), css_variant="liq", icon="◈")
         render_agent_card("Balance Sheet Calculator", outputs.get("balance_sheet", {}), css_variant="bs", icon="◇")
-        
-        cached_payload = st.session_state.get("ocr_cache", {}).get("payload", {})
-        entity_data = cached_payload.get("entity")
-        if isinstance(entity_data, dict):
-            qualitative_text = entity_data.get("qualitative_context", "")
-        else:
-            qualitative_text = ""
-            
-        if qualitative_text:
-            qual_html = f"""
-            <div class="bb-agent-card" style="border-left: 4px solid #CC88FF; margin-bottom: 16px;">
-                <div class="bb-agent-card-title" style="color:#CC88FF;">Management Commentary / Board Notes</div>
-                <div style="font-size:12px; color:#9A9AB0; line-height:1.6; max-height: 200px; overflow-y: auto; white-space: pre-wrap;">{qualitative_text}</div>
-            </div>
-            """
-            st.markdown(qual_html, unsafe_allow_html=True)
-        
-        report = workflow_state.get("credit_risk_report")
-        if report:
-            render_section_header("Final Credit Risk Report", subtitle="Synthesized by CreditRiskAgent")
-            
-            risk_rating = report.get("risk_rating", "Unknown")
-            color = "#00FF88" if risk_rating.lower() == "low" else "#FFB000" if risk_rating.lower() == "moderate" else "#FF6B35"
-            st.markdown(f"**Risk Rating:** <span style='color:{color};font-weight:bold;'>{risk_rating}</span>", unsafe_allow_html=True)
-            
-            st.markdown(f"**Analysis:** {report.get('analysis', '')}")
-            st.markdown(f"**Recommendation:** {report.get('recommendation', '')}")
 
+    # ── Credit Assessment Report ──────────────────────────────────────────
+    render_hr()
+    credit_report = workflow_state.get("credit_report")
+    if credit_report:
+        render_section_header("Credit Assessment Report", subtitle="V2 Synthesized by Credit Assessment Agent")
+
+        # Strengths & Risks
+        col_s, col_r = st.columns(2)
+        with col_s:
+            strengths = credit_report.get("major_strengths", [])
+            if strengths:
+                st.markdown("#### 💪 Major Strengths")
+                for s in strengths:
+                    st.markdown(f'<div style="font-size:12px;color:#00FF88;margin:4px 0;padding:6px 10px;background:#001A0D;border-left:3px solid #00FF88;border-radius:2px;">{html.escape(str(s))}</div>', unsafe_allow_html=True)
+
+        with col_r:
+            risks = credit_report.get("major_risks", [])
+            if risks:
+                st.markdown("#### ⚠️ Major Risks")
+                for r in risks:
+                    st.markdown(f'<div style="font-size:12px;color:#FF6B35;margin:4px 0;padding:6px 10px;background:#1A0D00;border-left:3px solid #FF6B35;border-radius:2px;">{html.escape(str(r))}</div>', unsafe_allow_html=True)
+
+        # Recommendation narrative
+        narrative = credit_report.get("recommendation_narrative", "")
+        if narrative:
+            st.markdown("#### 📋 Assessment Narrative")
+            st.markdown(f'<div style="font-size:13px;color:#D8D8E0;line-height:1.7;padding:16px;background:#0B0C10;border:1px solid #1E2030;border-radius:4px;">{html.escape(narrative)}</div>', unsafe_allow_html=True)
+
+        # Disclaimer
+        disclaimer = credit_report.get("disclaimer", "")
+        if disclaimer:
+            st.markdown(f'<div style="font-size:10px;color:#7A7D96;margin-top:12px;padding:8px;background:#070809;border:1px solid #1E2030;border-radius:2px;font-style:italic;">{html.escape(disclaimer)}</div>', unsafe_allow_html=True)
+
+    # ── Qualitative Findings ──────────────────────────────────────────────
+    qual_findings = workflow_state.get("qualitative_findings", [])
+    if qual_findings and any(f != "No qualitative corporate intelligence available for this company." for f in qual_findings):
+        render_hr()
+        render_section_header("Qualitative Corporate Intelligence", subtitle="Extracted from management commentary")
+        for f in qual_findings:
+            st.markdown(f'<div style="font-size:12px;color:#CC88FF;margin:4px 0;padding:6px 10px;background:#0D0020;border-left:3px solid #CC88FF;border-radius:2px;">{html.escape(str(f))}</div>', unsafe_allow_html=True)
+
+    # ── Workflow Log ──────────────────────────────────────────────────────
+    workflow_log = workflow_state.get("workflow_log", [])
+    if workflow_log:
+        render_hr()
+        with st.expander("Agent Workflow Log (Transparency)"):
+            for log_entry in workflow_log:
+                st.markdown(f'<span style="font-size:10px;color:#7A7D96;font-family:monospace;">{html.escape(str(log_entry))}</span>', unsafe_allow_html=True)
+
+    # ── Raw Agent Outputs (Audit Trail) ───────────────────────────────────
     render_hr()
     render_section_header("Raw Agent Outputs", subtitle="Full JSON — audit trail")
     for label, key in [
-        ("Revenue Calculator", "revenue"), 
+        ("Revenue Calculator", "revenue"),
         ("Liquidity Calculator", "liquidity"),
-        ("Balance Sheet Calculator", "balance_sheet"), 
-        ("SaaS Metrics", "saas_metrics"),
-        ("Workflow State", "workflow_state"),
+        ("Balance Sheet Calculator", "balance_sheet"),
+        ("V2 Workflow State", "workflow_state"),
     ]:
         with st.expander(f"{label}"):
             st.json(outputs.get(key, {}))

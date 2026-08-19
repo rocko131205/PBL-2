@@ -1,7 +1,25 @@
+"""Credit Risk Agent — V2
+
+V2 REFACTOR: The V1 agent sent DSCR + Rule-of-40 to the LLM and asked it
+to generate a JSON risk report. The LLM was the sole source of the risk rating,
+analysis, and recommendation — entirely ungrounded.
+
+V2 approach:
+  - Receives the FULL fact ledger (all deterministic metrics)
+  - Receives peer comparison data (actual, not hallucinated)
+  - Receives qualitative evidence (structured extraction)
+  - Receives data credibility report
+  - Risk classification is DETERMINISTIC (from risk_indicator_engine)
+  - LLM synthesizes a narrative but CANNOT override deterministic classifications
+  - Output as CreditAssessmentReport Pydantic model
+
+This module is now a thin wrapper — the actual logic is in agent_workflow.py's
+credit_assessment_node. This module exists for backward compatibility.
+"""
 from __future__ import annotations
+
 from typing import Any, Dict
-import json
-import requests
+
 
 def run_credit_risk_assessment(
     record: Any,
@@ -10,63 +28,28 @@ def run_credit_risk_assessment(
     peers: Dict[str, Any],
     base_url: str,
     model: str,
-    api_key: str
+    api_key: str,
 ) -> Dict[str, Any]:
+    """V2 credit risk assessment — delegates to the agentic workflow.
+
+    This function is maintained for backward compatibility.
+    The actual credit assessment is handled by the credit_assessment_node
+    in agent_workflow.py, which receives the full fact ledger and produces
+    a CreditAssessmentReport.
+
+    If called directly, returns a stub indicating that the assessment
+    should be done through the full workflow pipeline.
     """
-    Final synthesis agent that generates the credit risk report.
-    """
-    
-    qualitative_context = getattr(record, 'qualitative_context', '')
-    qualitative_str = f"Management Commentary / Qualitative Strategy:\n{qualitative_context}" if qualitative_context else ""
-    
-    prompt = f"""
-    You are a Credit Risk Officer specializing in SaaS companies.
-    Review the following financial profile:
-    
-    DSCR (Debt Service Coverage Ratio): {dscr_ratio:.2f}
-    SaaS Rule of 40: {saas_metrics.get('rule_of_40', 0):.2f}%
-    SaaS Growth Rate: {saas_metrics.get('growth_rate_pct', 0):.2f}%
-    
-    {qualitative_str}
-    
-    Identified Peers:
-    {json.dumps(peers, indent=2)}
-    
-    Write a concise credit risk summary. Include:
-    1. A risk rating (Low, Moderate, High)
-    2. A brief analysis of their debt serviceability (DSCR).
-    3. A brief analysis of their SaaS health (Rule of 40) compared to typical peers.
-    4. Explicitly synthesize the quantitative metrics with the Qualitative Strategy / Management Commentary provided above (e.g. how does management's strategic pivot or noted risks affect their ability to service debt?).
-    
-    Output strictly as a JSON object with exactly these 3 keys: "risk_rating", "analysis", "recommendation".
-    CRITICAL: The values for "analysis" and "recommendation" MUST be plain text strings (e.g. paragraphs). Do NOT return nested JSON objects or arrays for these fields.
-    """
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
+    return {
+        "report": {
+            "risk_rating": "Unknown",
+            "analysis": (
+                "V2: Credit risk assessment now uses the full fact ledger and "
+                "deterministic risk classification. Run the full analysis pipeline "
+                "via run_analysis() to get a comprehensive, grounded credit report."
+            ),
+            "recommendation": (
+                "Please run the full V2 analysis pipeline for a complete assessment."
+            ),
+        }
     }
-    
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "You are a Credit Risk Officer. Output only valid JSON."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.2
-    }
-    
-    try:
-        resp = requests.post(f"{base_url}/chat/completions", headers=headers, json=payload, timeout=45)
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"].strip()
-        
-        if content.startswith("```json"):
-            content = content[7:-3].strip()
-        elif content.startswith("```"):
-            content = content[3:-3].strip()
-            
-        report = json.loads(content)
-        return {"report": report}
-    except Exception as e:
-        return {"error": str(e)}
