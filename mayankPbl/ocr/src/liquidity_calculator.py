@@ -1,14 +1,12 @@
-"""Liquidity Agent (cash-flow proxy)
+"""Liquidity Calculator (cash-flow proxy)
 
-This agent consumes OCR-produced Bloomberg financial statement JSON files from
+This service consumes OCR-produced Bloomberg financial statement JSON files from
 this repository's `output/` directory. It computes deterministic liquidity and
-funding-stability indicators using Python (pandas/numpy), and uses an LLM *only*
-for a concise explanation of the computed metrics.
+funding-stability indicators using Python (pandas/numpy).
 
 Hard constraints:
 - All numbers are computed in Python.
-- The LLM must not compute or infer any new numbers.
-- The LLM must use only the provided metrics.
+- Pure deterministic service, no LLM integration.
 """
 
 from __future__ import annotations
@@ -351,124 +349,8 @@ def classify_liquidity_risk(
 
 
 # ------------------------------
-# LangChain explanation
-# ------------------------------
-
-
-def _explanation_violations(*, text: str) -> list[str]:
-    """Lightweight compliance checks for local models."""
-    low = text.lower()
-    violations: list[str] = []
-
-    # Must not mention forbidden terms.
-    for term in ["cash flow", "profit", "profitability", "margin", "debt"]:
-        if term in low:
-            violations.append(f"forbidden_term:{term}")
-
-    # Do not emit explicit risk labels in the LLM-generated portion.
-    # We allow adjectives like "low volatility"; we only forbid risk-level phrases.
-    if re.search(r"\b(low|moderate|high)\s+risk\b", low):
-        violations.append("risk_label_used")
-    if re.search(r"\brisk\s+(?:is|looks|appears)\s+(?:low|moderate|high)\b", low):
-        violations.append("risk_label_used")
-
-    return violations
-
-
-def generate_llm_explanation(
-    *,
-    entity: str,
-    metrics: dict[str, Any],
-    model: str,
-    base_url: str,
-    api_key: str,
-) -> str:
-    """Generate a concise explanation using only computed metrics.
-
-    Includes a small retry loop with guardrails because some local models ignore
-    constraints.
-    """
-
-    # We keep the risk flag out of the LLM text entirely to avoid models
-    # emitting conflicting labels ("moderate" vs "low", etc.). The final caller
-    # can add the risk flag deterministically.
-    metrics_for_llm = {
-        k: v
-        for k, v in metrics.items()
-        if k not in {"liquidity_risk_flag"}
-    }
-
-    system = (
-        "You are a financial analyst. "
-        "You must not calculate, estimate, or infer any new numbers. "
-        "Use only the provided metrics. "
-        "Do not mention debt, margins, profitability, or cash flow (these are not provided). "
-        "Do not provide credit, lending, or investment recommendations. "
-        "Write in a concise, professional tone (4-8 sentences). "
-        "Do not label overall risk (avoid phrases like 'high risk', 'moderate risk', 'low risk'); the risk flag will be provided separately."
-    )
-
-    human = {
-        "task": "Explain liquidity health and funding stability using ONLY the provided metrics.",
-        "entity": entity,
-        "metric_definitions": {
-            "avg_current_ratio": "Average current_assets/current_liabilities over the available periods.",
-            "working_capital_trend": "Direction of working capital over time: increasing/declining/stable.",
-            "liquidity_volatility": "Volatility of working capital (standard deviation, in the same units as the statements).",
-            "asset_growth_rate": "Average YoY growth in total assets (percent).",
-            "liability_growth_rate": "Average YoY growth in total liabilities (percent).",
-            "equity_growth_rate": "Average YoY growth in equity (percent).",
-            "liquidity_risk_flag": "Qualitative liquidity risk: low/moderate/high.",
-        },
-        "metrics": metrics_for_llm,
-        "notes": [
-            "Do not introduce new numbers, ranges, or time horizons.",
-            "Do not label overall risk (avoid phrases like 'high risk', 'moderate risk', 'low risk').",
-        ],
-    }
-
-    llm = ChatOpenAI(
-        model=model,
-        temperature=0,
-        base_url=base_url,
-        api_key=api_key,
-    )
-
-    messages = [SystemMessage(content=system), HumanMessage(content=json.dumps(human, indent=2))]
-
-    for attempt in range(2):
-        resp = llm.invoke(messages)
-        text = getattr(resp, "content", None)
-        if not isinstance(text, str) or not text.strip():
-            raise RuntimeError("LLM returned empty explanation")
-
-        text = text.strip()
-        violations = _explanation_violations(text=text)
-        if not violations:
-            return text
-
-        # Retry once with a correction.
-        messages = [
-            SystemMessage(
-                content=(
-                    "Correction: remove forbidden terms. Do not mention cash flow, profitability, margins, or debt. "
-                    "Do not label overall risk (avoid phrases like 'high risk', 'moderate risk', 'low risk')."
-                )
-            ),
-            messages[0],
-            messages[1],
-        ]
-
-    raise RuntimeError(f"LLM explanation violated constraints: {violations}")
-
-
-# ------------------------------
 # Output builder / orchestration
 # ------------------------------
-
-
-def build_agent_output(*, entity: str, metrics: dict[str, Any], analysis: str) -> dict[str, Any]:
-    return {"entity": entity, "metrics": metrics, "analysis": analysis}
 
 
 def write_agent_output(*, payload: dict[str, Any], output_dir: str | Path) -> Path:
@@ -491,56 +373,28 @@ def write_agent_output(*, payload: dict[str, Any], output_dir: str | Path) -> Pa
     return out_path
 
 
-def run_liquidity_agent(
-    *,
-    json_path: str | Path,
-    model: str | None = None,
-    base_url: str | None = None,
-    api_key: str | None = None,
-) -> dict[str, Any]:
+def calculate_liquidity_metrics(json_path: str | Path) -> dict[str, Any]:
     payload = load_json(json_path)
     entity, df = extract_liquidity_metrics(payload)
     computed = compute_liquidity_indicators(df)
     metrics = computed["metrics"]
 
-    resolved_model = model or os.environ.get(
-        "LIQUIDITY_AGENT_MODEL", "qwen2.5-coder-1.5b-instruct-mlx"
-    )
-    resolved_base_url = base_url or os.environ.get(
-        "LIQUIDITY_AGENT_BASE_URL", "http://127.0.0.1:1234/v1"
-    )
-    resolved_api_key = api_key or os.environ.get("LIQUIDITY_AGENT_API_KEY", "local")
-
-    llm_text = generate_llm_explanation(
-        entity=entity,
-        metrics=metrics,
-        model=resolved_model,
-        base_url=resolved_base_url,
-        api_key=resolved_api_key,
-    )
-
-    # Deterministically include the risk flag without giving the LLM the chance
-    # to emit conflicting labels.
-    analysis = f"Liquidity risk flag: {metrics['liquidity_risk_flag']}. {llm_text}".strip()
-
-    return build_agent_output(entity=entity, metrics=metrics, analysis=analysis)
+    return {"entity": entity, "metrics": metrics}
 
 
 def _main() -> None:
     import argparse
 
-    ap = argparse.ArgumentParser(description="Liquidity Agent (deterministic metrics + LLM explanation)")
+    ap = argparse.ArgumentParser(description="Liquidity Calculator (deterministic metrics only)")
     ap.add_argument("--json", required=True, help="Path to an OCR output JSON")
-    ap.add_argument("--model", default=None, help="LLM model identifier")
-    ap.add_argument("--base-url", default=None, help="OpenAI-compatible base URL")
     ap.add_argument(
         "--out-dir",
         default="liquidity_output",
-        help="Directory to write the agent output JSON (default: liquidity_output/)",
+        help="Directory to write the output JSON (default: liquidity_output/)",
     )
     args = ap.parse_args()
 
-    out = run_liquidity_agent(json_path=args.json, model=args.model, base_url=args.base_url)
+    out = calculate_liquidity_metrics(json_path=args.json)
     written = write_agent_output(payload=out, output_dir=args.out_dir)
 
     # Keep stdout useful for demos, but also persist to a file.

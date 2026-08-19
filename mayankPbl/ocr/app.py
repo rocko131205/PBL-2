@@ -17,13 +17,13 @@ import pandas as pd
 import streamlit as st
 from streamlit_agraph import Config, Edge, Node, agraph
 
-from agents import (
-    balance_sheet_agent,
-    cross_reference_agent,
-    liquidity_agent,
-    revenue_agent,
-    sentiment_agent,
-)
+from src.revenue_calculator import calculate_revenue_metrics
+from src.balance_sheet_calculator import calculate_balance_sheet_metrics
+from src.liquidity_calculator import calculate_liquidity_metrics
+from src.saas_engine import compute_saas_metrics
+from src.agent_workflow import finveritas_v2_app
+from src.payload_mapper import payload_to_normalized_record
+from src.schema import DSCRInputs
 from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
 from src.yfinance_ingestion import fetch_by_ticker
 from src.private_company_ingestion import load_private_company_data, get_template_csv
@@ -382,100 +382,68 @@ def _run_agent_pipeline(
     api_key: str,
     news_api_key: str,
 ) -> None:
-    """Run all 5 agents on pre-loaded data and store results in session_state."""
-    avail       = _available_fields(payload)
-    required_liq = {"current_assets", "current_liabilities", "total_assets", "total_liabilities", "equity"}
-    required_bs  = {"total_assets", "total_liabilities", "equity"}
-    missing_liq  = sorted(required_liq - avail)
-    missing_bs   = sorted(required_bs  - avail)
-
+    """Run V2 Agent Pipeline: Deterministic Calculators + Data Sufficiency Graph."""
+    
+    # 1. Deterministic Calculators (No LLM)
     rev_path = agent_paths["revenue"]
     bs_path  = agent_paths["balance_sheet"]
     liq_path = agent_paths["liquidity"]
     entity   = str(payload.get("entity", {}).get("entity_id") or "UNKNOWN")
 
-    with st.spinner("Revenue Agent…"):
-        rev_out = _safe_run("Revenue Agent",
-            lambda: revenue_agent.run(json_path=rev_path, base_url=base_url, model=model, api_key=api_key))
+    with st.spinner("Computing Deterministic Metrics..."):
+        rev_out = _safe_run("Revenue Calculator", lambda: calculate_revenue_metrics(json_path=rev_path))
+        liq_out = _safe_run("Liquidity Calculator", lambda: calculate_liquidity_metrics(json_path=liq_path))
+        bs_out = _safe_run("Balance Sheet Calculator", lambda: calculate_balance_sheet_metrics(json_path=bs_path))
 
-    if missing_liq:
-        liq_out: dict = {"error": f"Liquidity Agent skipped — missing: {', '.join(missing_liq)}"}
-    else:
-        with st.spinner("Liquidity Agent…"):
-            liq_out = _safe_run("Liquidity Agent",
-                lambda: liquidity_agent.run(json_path=liq_path, base_url=base_url, model=model, api_key=api_key))
-
-    if missing_bs:
-        bs_out: dict = {"error": f"Balance Sheet Agent skipped — missing: {', '.join(missing_bs)}"}
-    else:
-        with st.spinner("Balance Sheet Agent…"):
-            _bs_path = bs_path
-            bs_out = _safe_run("Balance Sheet Agent",
-                lambda: balance_sheet_agent.run(json_path=_bs_path, base_url=base_url, model=model, api_key=api_key))
-
-    _news_key = news_api_key.strip() if news_api_key else ""
-    if not _news_key:
-        sentiment_out: dict = {"error": "Sentiment Agent skipped — add a NewsAPI key in the sidebar (newsapi.org)."}
-    else:
-        with st.spinner("Sentiment Agent…"):
-            _ent = entity
-            _nk  = _news_key
-            sentiment_out = _safe_run(
-                "Sentiment Agent",
-                lambda: sentiment_agent.run(
-                    company_name=_ent, news_api_key=_nk,
-                    base_url=base_url, model=model, api_key=api_key,
-                ),
-            )
-
-    _sentiment_ok = sentiment_out and not isinstance(sentiment_out.get("error"), str)
-    _valid_outputs = sum(1 for x in [rev_out, liq_out, bs_out, sentiment_out] if x and not isinstance(x.get("error"), str))
-    if _valid_outputs < 3:
-        cross_out: dict = {"error": "Cross Reference Agent skipped — requires at least 3 successful agent outputs to run reliably."}
-    else:
-        with st.spinner("Cross Reference Agent…"):
-            _rev, _liq, _bs = rev_out, liq_out, bs_out
-            cross_out = _safe_run(
-                "Cross Reference Agent",
-                lambda: cross_reference_agent.run(
-                    entity=entity, revenue=_rev, liquidity=_liq, balance_sheet=_bs,
-                    sentiment=sentiment_out if _sentiment_ok else None,
-                    base_url=base_url, model=model, api_key=api_key,
-                ),
-            )
-
+    # 2. Data Sufficiency Workflow (LangGraph)
+    st.markdown("### Agent Orchestration")
+    with st.spinner("Evaluating Data Sufficiency Workflow..."):
+        record = payload_to_normalized_record(payload)
+        
+        # We will retrieve DSCR inputs from session state if the user has provided them
+        dscr_inputs_dict = st.session_state.get("dscr_user_inputs")
+        dscr_inputs = None
+        if dscr_inputs_dict:
+            try:
+                dscr_inputs = DSCRInputs(**dscr_inputs_dict)
+            except Exception:
+                pass
+                
+        initial_state = {
+            "company_record": record,
+            "dscr_inputs": dscr_inputs,
+            "missing_fields": [],
+            "requires_human_input": False,
+            "human_input_prompt": "",
+            "dscr_ratio": None,
+            "saas_metrics": None,
+            "peers": None,
+            "credit_risk_report": None,
+            "llm_config": {
+                "base_url": base_url,
+                "model": model,
+                "api_key": api_key
+            }
+        }
+        
+        # Run LangGraph
+        result_state = finveritas_v2_app.invoke(initial_state)
+    
+    # Save results to session state
     st.session_state["agent_outputs"] = {
-        "entity": entity, "revenue": rev_out, "liquidity": liq_out,
-        "balance_sheet": bs_out, "sentiment": sentiment_out, "cross_reference": cross_out,
+        "entity": entity,
+        "revenue": rev_out,
+        "liquidity": liq_out,
+        "balance_sheet": bs_out,
+        "workflow_state": result_state,
+        "saas_metrics": compute_saas_metrics(record)
     }
 
-    # ── Save to MongoDB file history ──────────────────────────────────────────
-    try:
-        _user = st.session_state.get("auth_user") or {}
-        _uid  = _user.get("user_id")
-        _cached = st.session_state.get("ocr_cache", {})
-        _payload_hist = _cached.get("payload") or payload
-        _report_hist  = run_verification(
-            source={
-                "pdf": "bloomberg_pdf", "ticker": "ticker", "csv": "csv"
-            }.get((_cached.get("cache_key") or ("csv",))[0], "csv"),
-            payload=_payload_hist,
-        )
-        if _uid:
-            _doc = make_history_doc(
-                user_id=_uid,
-                source_type=(_cached.get("cache_key") or ("csv",))[0],
-                source_label=_cached.get("source_label", "—"),
-                entity_name=entity,
-                fields_loaded=list(_available_fields(_payload_hist)),
-                credibility_score=_report_hist.score,
-            )
-            get_file_history().insert_one(_doc)
-    except Exception:
-        pass  # history is non-critical — never break the pipeline
-
-    # ── Notify user (No Auto-redirect) ──────────────────────────────────────────────
-    st.success("✅ **Analysis complete!** You can now navigate to the **Financial Analysis** section in the sidebar.")
+    if result_state["requires_human_input"]:
+        st.warning(f"⚠️ Agent Paused: {result_state['human_input_prompt']}")
+        st.info("Please navigate to the **Financial Analysis** section to provide the missing debt information.")
+    else:
+        st.success("✅ **Analysis complete!** You can now navigate to the **Financial Analysis** section in the sidebar.")
 
 
 def _render_agent_status_badges(payload: dict[str, Any], news_api_key: str) -> None:
@@ -583,6 +551,21 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
             with st.spinner(f"Fetching financial data for {ticker} via yfinance…"):
                 try:
                     payload = fetch_by_ticker(ticker)
+                    
+                    # Fetch qualitative context
+                    qualitative_text = ""
+                    if fmp_api_key:
+                        from src.supplemental_fetchers import fetch_latest_earnings_call_transcript
+                        try:
+                            qualitative_text = fetch_latest_earnings_call_transcript(ticker, fmp_api_key)
+                        except Exception as e:
+                            pass
+                    
+                    # Store qualitative context directly in the entity payload so it persists
+                    if "entity" not in payload or payload["entity"] is None:
+                        payload["entity"] = {}
+                    payload["entity"]["qualitative_context"] = qualitative_text
+                    
                     _, written_path, agent_paths = payload_to_agent_files(payload, output_dir="output")
                 except Exception as exc:
                     st.error(f"Ticker fetch failed: {exc}")
@@ -681,6 +664,16 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
     render_hr()
     render_section_header("Extracted Key Metrics", subtitle=f"Source: {source_label}")
     render_metric_cards(payload)
+    
+    qualitative_text = (payload.get("entity") or {}).get("qualitative_context", "")
+    st.markdown("### Qualitative Context (Board Notes, Strategy, Earnings Call)")
+    st.info("The Credit Risk Agent will use this text to contextualize the hard financial metrics.")
+    user_qualitative = st.text_area("Edit or Paste Qualitative Context", value=qualitative_text, height=150)
+    if user_qualitative != qualitative_text:
+        if "entity" not in payload or payload["entity"] is None:
+            payload["entity"] = {}
+        payload["entity"]["qualitative_context"] = user_qualitative
+        st.session_state["ocr_cache"]["payload"] = payload
 
     with st.expander("Raw Data Preview", expanded=False):
         st.dataframe(_preview_df(payload), use_container_width=True)
@@ -805,47 +798,38 @@ def page_workflow() -> None:
         <div class="bb-workflow-legend">
             <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#4A4A5A"></span>I/O Nodes</div>
             <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#0D3B66"></span>OCR Parser</div>
-            <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#3B2800"></span>Revenue Agent</div>
-            <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#003040"></span>Liquidity Agent</div>
-            <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#3B1800"></span>Balance Sheet Agent</div>
-            <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#2A0040"></span>Sentiment Agent</div>
-            <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#002010"></span>Cross Reference</div>
+            <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#3B2800"></span>Deterministic Engines</div>
+            <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#003040"></span>Data Sufficiency (LangGraph)</div>
+            <div class="bb-legend-item"><span class="bb-legend-dot" style="background:#002010"></span>DSCR / Credit Assessment</div>
         </div>""", unsafe_allow_html=True)
 
     nodes = [
         # ── Data sources (3 paths) ──────────────────────────────────────────
-        Node(id="pdf",    label="Bloomberg\nPDF",          color="#1A1A2E", shape="box",     size=20, font={"color":"#CCCCCC","size":12}, title="Bloomberg Financial Statement PDF(s) — upload via Tab 1"),
-        Node(id="ticker", label="Ticker\n(yfinance)",       color="#1A1A2E", shape="box",     size=20, font={"color":"#00BFFF","size":12}, title="Listed company ticker (e.g. INFY.NS) — auto-fetches annual financials via yfinance"),
-        Node(id="csv",    label="Private Co.\nCSV/Excel",   color="#1A1A2E", shape="box",     size=20, font={"color":"#FFB000","size":12}, title="Private/non-listed company — upload a structured CSV or Excel file"),
-        Node(id="news",   label="News\nAPI",                color="#1A1A2E", shape="box",     size=20, font={"color":"#CC88FF","size":12}, title="NewsAPI — latest company news headlines (newsapi.org)"),
+        Node(id="pdf",    label="Bloomberg\nPDF",          color="#1A1A2E", shape="box",     size=20, font={"color":"#CCCCCC","size":12}),
+        Node(id="ticker", label="Ticker\n(yfinance)",       color="#1A1A2E", shape="box",     size=20, font={"color":"#00BFFF","size":12}),
+        Node(id="csv",    label="Private Co.\nCSV/Excel",   color="#1A1A2E", shape="box",     size=20, font={"color":"#FFB000","size":12}),
         # ── Ingestion / Schema converter ────────────────────────────────────
-        Node(id="ingest", label="Ingestion\nLayer",         color="#0D3B66", shape="box",     size=22, font={"color":"#00BFFF","size":12}, title="<b>Ingestion Layer</b><br>PDF → OCR parser · Ticker → yfinance · CSV → structured parser<br>All converge to same internal JSON schema → output/"),
+        Node(id="ingest", label="Normalization\nLayer",         color="#0D3B66", shape="box",     size=22, font={"color":"#00BFFF","size":12}),
         # ── Deterministic agents ─────────────────────────────────────────────
-        Node(id="rev",    label="Revenue\nAgent",           color="#3B2800", shape="ellipse", size=22, font={"color":"#FFB000","size":12}, title=agent_tooltip_html("Revenue Agent",       outputs.get("revenue"))),
-        Node(id="liq",    label="Liquidity\nAgent",         color="#003040", shape="ellipse", size=22, font={"color":"#00BFFF","size":12}, title=agent_tooltip_html("Liquidity Agent",     outputs.get("liquidity"))),
-        Node(id="bs",     label="Balance Sheet\nAgent",     color="#3B1800", shape="ellipse", size=22, font={"color":"#FF6B35","size":12}, title=agent_tooltip_html("Balance Sheet Agent", outputs.get("balance_sheet"))),
-        Node(id="sent",   label="Sentiment\nAgent",         color="#2A0040", shape="ellipse", size=22, font={"color":"#CC88FF","size":12}, title=agent_tooltip_html("Sentiment Agent",     outputs.get("sentiment"))),
-        # ── LLM synthesis ────────────────────────────────────────────────────
-        Node(id="cross",  label="Cross\nReference\nAgent",  color="#002010", shape="box",     size=24, font={"color":"#00FF88","size":12}, title=agent_tooltip_html("Cross Reference Agent",outputs.get("cross_reference"))),
-        Node(id="out",    label="Explainable\nOutput",       color="#1A1A2E", shape="box",     size=20, font={"color":"#E6E6E6","size":12}, title="Final explainable financial analysis report"),
+        Node(id="rev",    label="Revenue\nCalculator",      color="#3B2800", shape="ellipse", size=22, font={"color":"#FFB000","size":12}),
+        Node(id="liq",    label="Liquidity\nCalculator",    color="#3B2800", shape="ellipse", size=22, font={"color":"#00BFFF","size":12}),
+        Node(id="bs",     label="Balance Sheet\nCalculator",color="#3B2800", shape="ellipse", size=22, font={"color":"#FF6B35","size":12}),
+        Node(id="saas",   label="SaaS Rule of 40\nEngine",  color="#3B2800", shape="ellipse", size=22, font={"color":"#CC88FF","size":12}),
+        # ── LangGraph Workflow ────────────────────────────────────────────────────
+        Node(id="data_suf",label="Data Sufficiency\nAgent",  color="#003040", shape="box",     size=24, font={"color":"#00FF88","size":12}),
+        Node(id="dscr",   label="DSCR\nCalculator",         color="#002010", shape="box",     size=20, font={"color":"#E6E6E6","size":12}),
     ]
     edges = [
-        # 3 sources → ingestion layer
         Edge(source="pdf",    target="ingest", color="#555566", width=2),
         Edge(source="ticker", target="ingest", color="#00BFFF", width=2),
         Edge(source="csv",    target="ingest", color="#FFB000", width=2),
-        # news → sentiment
-        Edge(source="news",   target="sent",   color="#CC88FF", width=2),
-        # ingestion layer → deterministic agents
         Edge(source="ingest", target="rev",    color="#FFB000", width=1),
         Edge(source="ingest", target="liq",    color="#00BFFF", width=1),
         Edge(source="ingest", target="bs",     color="#FF6B35", width=1),
-        # agents → cross-reference (LLM)
-        Edge(source="rev",    target="cross",  color="#FFB000", width=1, dashes=True),
-        Edge(source="liq",    target="cross",  color="#00BFFF", width=1, dashes=True),
-        Edge(source="bs",     target="cross",  color="#FF6B35", width=1, dashes=True),
-        Edge(source="sent",   target="cross",  color="#CC88FF", width=1, dashes=True),
-        Edge(source="cross",  target="out",    color="#00FF88", width=2),
+        Edge(source="ingest", target="saas",   color="#CC88FF", width=1),
+        
+        Edge(source="ingest", target="data_suf", color="#FFFFFF", width=2),
+        Edge(source="data_suf", target="dscr",   color="#00FF88", width=2, label="If Data Sufficient"),
     ]
     config = Config(width="100%", height=520, directed=True, physics=False, hierarchical=True,
                     hierarchical_sort_method="directed", nodeHighlightBehavior=True, highlightColor="#FFB000", collapsible=False)
@@ -898,7 +882,7 @@ def page_workflow() -> None:
 # ── Page 3 ────────────────────────────────────────────────────────────────────
 
 def page_analysis() -> None:
-    render_section_header("Financial Analysis Output", subtitle="Deterministic metrics + LLM explanations")
+    render_section_header("Financial Analysis Output", subtitle="Deterministic metrics & Credit Assessment")
 
     outputs = st.session_state.get("agent_outputs")
     if not outputs:
@@ -911,52 +895,195 @@ def page_analysis() -> None:
     entity = outputs.get("entity", "—")
     st.markdown(f'<div style="font-size:13px;color:#7A7D96;margin-bottom:24px;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid #1E2030;padding-bottom:12px;">Entity: <strong style="color:#FFB000;font-size:14px;">{entity.upper()}</strong></div>', unsafe_allow_html=True)
 
+    workflow_state = outputs.get("workflow_state", {})
+    
+    if workflow_state.get("requires_human_input"):
+        st.error(f"🛑 Data Sufficiency Check Failed")
+        st.warning(workflow_state["human_input_prompt"])
+        
+        st.markdown("### Manual DSCR Input Form")
+        with st.form("dscr_form"):
+            e_prin = st.number_input("Existing Loan Principal Repayment (Annual)", min_value=0.0, value=0.0)
+            e_int = st.number_input("Existing Loan Interest (Annual)", min_value=0.0, value=0.0)
+            p_prin = st.number_input("Proposed Loan Principal Repayment (Annual)", min_value=0.0, value=0.0)
+            p_int = st.number_input("Proposed Loan Interest (Annual)", min_value=0.0, value=0.0)
+            
+            if st.form_submit_button("Submit Debt Data and Resume Analysis"):
+                st.session_state["dscr_user_inputs"] = {
+                    "existing_loan_principal_repayment": e_prin,
+                    "existing_loan_interest": e_int,
+                    "proposed_loan_principal_repayment": p_prin,
+                    "proposed_loan_interest": p_int
+                }
+                # User will need to click re-run from the first page or we can orchestrate it automatically
+                st.success("Debt metrics saved! Please go back to the Upload page and click Run Full Analysis again.")
+                st.stop()
+        return
+
     c1, c2 = st.columns(2)
     with c1:
-        render_section_header("Revenue Agent", subtitle="Income Statement Analysis")
-        render_agent_card("Revenue Agent", outputs.get("revenue", {}), css_variant="", icon="◆")
+        render_section_header("Revenue & SaaS", subtitle="Income Statement & SaaS Metrics")
+        
+        saas_metrics = outputs.get("saas_metrics", {})
+        if saas_metrics:
+            gr = saas_metrics.get("growth_rate_pct", 0)
+            pm = saas_metrics.get("profit_margin_pct", 0)
+            r40 = saas_metrics.get("rule_of_40", 0)
+            is_healthy = saas_metrics.get("is_healthy", False)
+            color = "#00FF88" if is_healthy else "#FF6B35"
+            status = "HEALTHY" if is_healthy else "NEEDS IMPROVEMENT"
+            
+            saas_html = f"""
+            <div class="bb-agent-card">
+                <div class="bb-agent-card-title">SaaS Rule of 40</div>
+                <div class="bb-metric-row">
+                    <span class="bb-mkey">Growth Rate</span>
+                    <span class="bb-mval">{gr:.2f}%</span>
+                </div>
+                <div class="bb-metric-row">
+                    <span class="bb-mkey">Profit Margin Proxy</span>
+                    <span class="bb-mval">{pm:.2f}%</span>
+                </div>
+                <div class="bb-metric-row" style="margin-top:8px;border-top:1px solid #1E2030;padding-top:8px;">
+                    <span class="bb-mkey" style="color:{color};">Rule of 40 Score</span>
+                    <span class="bb-mval" style="color:{color};font-weight:bold;">{r40:.2f} ({status})</span>
+                </div>
+            </div>
+            """
+            st.markdown(saas_html, unsafe_allow_html=True)
+            
+        render_agent_card("Revenue Calculator", outputs.get("revenue", {}), css_variant="", icon="◆")
+        
+        peers = workflow_state.get("peers")
+        if peers:
+            render_section_header("Quantitative Peer Benchmarking", subtitle="Dynamically Estimated by LLM")
+            
+            target_gr = saas_metrics.get("growth_rate_pct", 0) if saas_metrics else 0
+            target_pm = saas_metrics.get("profit_margin_pct", 0) if saas_metrics else 0
+            target_r40 = saas_metrics.get("rule_of_40", 0) if saas_metrics else 0
+            
+            peers_html = f"""<div class="bb-agent-card" style="padding: 0; overflow-x: auto;">
+<table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+<thead>
+<tr style="border-bottom: 1px solid #1E2030; background: #0B0C10;">
+<th style="padding: 12px; color: #7A7D96;">Company</th>
+<th style="padding: 12px; color: #7A7D96;">Annual Revenue (USD)</th>
+<th style="padding: 12px; color: #7A7D96;">Growth</th>
+<th style="padding: 12px; color: #7A7D96;">Margin</th>
+<th style="padding: 12px; color: #7A7D96;">Rule of 40</th>
+</tr>
+</thead>
+<tbody>
+<tr style="border-bottom: 1px solid #1E2030; background: #13141C;">
+<td style="padding: 12px; font-weight: bold; color: #FFB000;">TARGET <span style="font-size:11px; color:#7A7D96;">({entity})</span></td>
+<td style="padding: 12px; color: #E6E6E6;">—</td>
+<td style="padding: 12px; color: #E6E6E6;">{target_gr:.1f}%</td>
+<td style="padding: 12px; color: #E6E6E6;">{target_pm:.1f}%</td>
+<td style="padding: 12px; font-weight: bold; color: #00FF88;">{target_r40:.1f}</td>
+</tr>"""
+            for p in peers:
+                name = p.get('company_name', 'Unknown')
+                ticker = p.get('ticker', 'N/A')
+                rev = p.get('estimated_revenue_usd', 'N/A')
+                gr = p.get('estimated_growth_rate', 0)
+                pm = p.get('estimated_profit_margin', 0)
+                r40 = p.get('estimated_rule_of_40', 0)
+                delta = p.get('competitive_delta', '')
+                peers_html += f"""<tr style="border-bottom: 1px solid #1E2030;">
+<td style="padding: 12px;">
+<div style="color: #00BFFF; font-weight: bold;">{name} <span style="font-size:10px; background:#1E2030; padding:2px 4px; border-radius:3px; color:#9A9AB0;">{ticker}</span></div>
+<div style="font-size: 11px; color: #9A9AB0; margin-top: 4px;">{delta}</div>
+</td>
+<td style="padding: 12px; color: #E6E6E6;">{rev}</td>
+<td style="padding: 12px; color: #E6E6E6;">{gr}%</td>
+<td style="padding: 12px; color: #E6E6E6;">{pm}%</td>
+<td style="padding: 12px; color: #CC88FF; font-weight:bold;">{r40}</td>
+</tr>"""
+            peers_html += "</tbody></table></div>"
+            st.markdown(peers_html, unsafe_allow_html=True)
+            
     with c2:
-        render_section_header("Liquidity Agent", subtitle="Working Capital & Funding Stability")
-        render_agent_card("Liquidity Agent", outputs.get("liquidity", {}), css_variant="liq", icon="◈")
-
-    render_hr()
-
-    c3, c4 = st.columns(2)
-    with c3:
-        render_section_header("Balance Sheet Agent", subtitle="Leverage & Asset Growth")
-        render_agent_card("Balance Sheet Agent", outputs.get("balance_sheet", {}), css_variant="bs", icon="◇")
-    with c4:
-        render_section_header("Sentiment Agent", subtitle="Public Perception from Latest News")
-        render_agent_card("Sentiment Agent", outputs.get("sentiment", {}), css_variant="", icon="◉")
-
-    render_hr()
-    render_section_header("Cross Reference Agent", subtitle="Integrated Explainable Summary — Financial + Sentiment")
-
-    _valid_outputs_count = sum(1 for k in ["revenue", "liquidity", "balance_sheet", "sentiment"]
-                               if outputs.get(k) and not isinstance(outputs[k].get("error"), str))
-    if getattr(st.session_state, "_cross_ref_valid_count", None) != _valid_outputs_count:
-        st.session_state["_cross_ref_valid_count"] = _valid_outputs_count
-
-    if _valid_outputs_count == 3:
-        st.markdown(
-            '<div style="background:#1A0F00;border:1px solid #FF8800;border-left:4px solid #FF8800;'
-            'border-radius:4px;padding:12px;margin-bottom:16px;">'
-            '<span style="color:#FF8800;font-weight:bold;">⚠️ Partial Analysis Warning:</span><br>'
-            '<span style="color:#CCC;font-size:13px;">This cross-reference synthesis was generated using only 3 agent outputs. '
-            'The result may be less convincing or logical. In order to have the best or maximum summary, '
-            'try to provide all required data (or API keys) for all agents to successfully run.</span>'
-            '</div>',
-            unsafe_allow_html=True
-        )
-
-    render_cross_ref_card(outputs.get("cross_reference", {}))
+        render_section_header("Credit Risk Assessment", subtitle="DSCR and Liquidity")
+        
+        dscr_inputs = st.session_state.get("dscr_user_inputs")
+        if dscr_inputs:
+            inputs_html = f"""
+            <div class="bb-agent-card" style="border-left: 4px solid #FFB000; margin-bottom: 16px;">
+                <div class="bb-agent-card-title" style="color:#FFB000;">User Debt Assumptions</div>
+                <div class="bb-metric-row">
+                    <span class="bb-mkey">Existing Principal</span>
+                    <span class="bb-mval">${dscr_inputs.get('existing_loan_principal_repayment', 0):,.2f}</span>
+                </div>
+                <div class="bb-metric-row">
+                    <span class="bb-mkey">Existing Interest</span>
+                    <span class="bb-mval">${dscr_inputs.get('existing_loan_interest', 0):,.2f}</span>
+                </div>
+                <div class="bb-metric-row">
+                    <span class="bb-mkey">Proposed Principal</span>
+                    <span class="bb-mval">${dscr_inputs.get('proposed_loan_principal_repayment', 0):,.2f}</span>
+                </div>
+                <div class="bb-metric-row">
+                    <span class="bb-mkey">Proposed Interest</span>
+                    <span class="bb-mval">${dscr_inputs.get('proposed_loan_interest', 0):,.2f}</span>
+                </div>
+                <div class="bb-metric-row" style="margin-top:8px;border-top:1px solid #1E2030;padding-top:8px;">
+                    <span class="bb-mkey" style="color:#FFB000;">Total Debt Service (Denominator)</span>
+                    <span class="bb-mval" style="color:#FFB000;font-weight:bold;">${sum(dscr_inputs.values()):,.2f}</span>
+                </div>
+            </div>
+            """
+            st.markdown(inputs_html, unsafe_allow_html=True)
+            
+        dscr = workflow_state.get("dscr_ratio")
+        if dscr is not None:
+            st.markdown(f"""
+            <div class="bb-agent-card" style="border-left: 4px solid #00FF88;">
+                <div class="bb-metric-row">
+                    <span class="bb-mkey" style="font-size:14px;color:#00FF88;">DSCR Ratio</span>
+                    <span class="bb-mval" style="font-size:18px;color:#00FF88;font-weight:bold;">{dscr:,.2f}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown("**DSCR Ratio**: N/A")
+        render_agent_card("Liquidity Calculator", outputs.get("liquidity", {}), css_variant="liq", icon="◈")
+        render_agent_card("Balance Sheet Calculator", outputs.get("balance_sheet", {}), css_variant="bs", icon="◇")
+        
+        cached_payload = st.session_state.get("ocr_cache", {}).get("payload", {})
+        entity_data = cached_payload.get("entity")
+        if isinstance(entity_data, dict):
+            qualitative_text = entity_data.get("qualitative_context", "")
+        else:
+            qualitative_text = ""
+            
+        if qualitative_text:
+            qual_html = f"""
+            <div class="bb-agent-card" style="border-left: 4px solid #CC88FF; margin-bottom: 16px;">
+                <div class="bb-agent-card-title" style="color:#CC88FF;">Management Commentary / Board Notes</div>
+                <div style="font-size:12px; color:#9A9AB0; line-height:1.6; max-height: 200px; overflow-y: auto; white-space: pre-wrap;">{qualitative_text}</div>
+            </div>
+            """
+            st.markdown(qual_html, unsafe_allow_html=True)
+        
+        report = workflow_state.get("credit_risk_report")
+        if report:
+            render_section_header("Final Credit Risk Report", subtitle="Synthesized by CreditRiskAgent")
+            
+            risk_rating = report.get("risk_rating", "Unknown")
+            color = "#00FF88" if risk_rating.lower() == "low" else "#FFB000" if risk_rating.lower() == "moderate" else "#FF6B35"
+            st.markdown(f"**Risk Rating:** <span style='color:{color};font-weight:bold;'>{risk_rating}</span>", unsafe_allow_html=True)
+            
+            st.markdown(f"**Analysis:** {report.get('analysis', '')}")
+            st.markdown(f"**Recommendation:** {report.get('recommendation', '')}")
 
     render_hr()
     render_section_header("Raw Agent Outputs", subtitle="Full JSON — audit trail")
     for label, key in [
-        ("Revenue Agent", "revenue"), ("Liquidity Agent", "liquidity"),
-        ("Balance Sheet Agent", "balance_sheet"), ("Sentiment Agent", "sentiment"),
-        ("Cross Reference Agent", "cross_reference"),
+        ("Revenue Calculator", "revenue"), 
+        ("Liquidity Calculator", "liquidity"),
+        ("Balance Sheet Calculator", "balance_sheet"), 
+        ("SaaS Metrics", "saas_metrics"),
+        ("Workflow State", "workflow_state"),
     ]:
         with st.expander(f"{label}"):
             st.json(outputs.get(key, {}))

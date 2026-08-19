@@ -1,13 +1,11 @@
-"""Balance Sheet Stability Agent
+"""Balance Sheet Calculator
 
 Consumes OCR-produced Bloomberg financial statement JSON files (see `output/`).
-Computes balance-sheet metrics deterministically in Python and uses an LLM only
-for explanation.
+Computes balance-sheet metrics deterministically in Python.
 
 Hard constraints:
 - All numeric computations happen in Python (pandas/numpy).
-- The LLM must not compute numbers; it only explains provided metrics.
-- The LLM must use only provided metrics.
+- Pure deterministic service, no LLM integration.
 """
 
 from __future__ import annotations
@@ -22,8 +20,6 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 RiskLevel = Literal["low", "moderate", "high"]
 Trend = Literal["increasing", "declining", "stable"]
@@ -319,121 +315,32 @@ def classify_balance_sheet_risk(
 
 
 # ------------------------------
-# LangChain explanation
-# ------------------------------
-
-
-def generate_llm_explanation(
-    *,
-    entity: str,
-    metrics: dict[str, Any],
-    model: str,
-    base_url: str,
-    api_key: str,
-) -> str:
-    """Generate explanation text using only computed metrics."""
-
-    system = (
-        "You are a financial risk analyst. "
-        "You must not calculate, estimate, or infer any new numbers. "
-        "Use only the provided metrics. "
-        "Do not provide credit, lending, or investment recommendations. "
-        "Write in a concise, professional tone (4-8 sentences)."
-    )
-
-    human = {
-        "task": "Explain balance sheet stability and leverage using ONLY the provided metrics.",
-        "entity": entity,
-        "metrics": metrics,
-        "notes": [
-            "Do not introduce new numbers, ranges, or time horizons.",
-            "Do not reference financial line items that are not in the metrics.",
-        ],
-    }
-
-    llm = ChatOpenAI(
-        model=model,
-        base_url=base_url,
-        api_key=api_key,
-        temperature=0,
-    )
-
-    resp = llm.invoke(
-        [SystemMessage(content=system), HumanMessage(content=json.dumps(human, indent=2))]
-    )
-
-    text = getattr(resp, "content", None)
-    if not isinstance(text, str) or not text.strip():
-        raise RuntimeError("LLM returned empty explanation")
-
-    return text.strip()
-
-
-# ------------------------------
 # Final output
 # ------------------------------
 
-
-def build_final_output(*, entity: str, metrics: dict[str, Any], analysis: str) -> dict[str, Any]:
-    return {"entity": entity, "metrics": metrics, "analysis": analysis}
-
-
-def run_balance_sheet_agent(
-    *,
-    json_path: str | Path,
-    model: str | None = None,
-    base_url: str | None = None,
-    api_key: str | None = None,
-) -> dict[str, Any]:
+def calculate_balance_sheet_metrics(json_path: str | Path) -> dict[str, Any]:
     payload = load_json(json_path)
     entity, df = extract_balance_sheet_data(payload)
 
     computed = compute_balance_sheet_metrics(df)
     metrics = computed["metrics"]
 
-    # Defaults to Qwen-compatible settings; can be overridden for local demos.
-    resolved_model = model or os.environ.get("BS_AGENT_MODEL", "qwen-plus")
-    resolved_base_url = base_url or os.environ.get(
-        "BS_AGENT_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    )
-    resolved_api_key = api_key or os.environ.get("QWEN_API_KEY") or os.environ.get("BS_AGENT_API_KEY")
-    if not resolved_api_key:
-        raise ValueError(
-            "Missing API key for LLM explanation. Set QWEN_API_KEY (or pass --api-key)."
-        )
-
-    analysis = generate_llm_explanation(
-        entity=entity,
-        metrics=metrics,
-        model=resolved_model,
-        base_url=resolved_base_url,
-        api_key=resolved_api_key,
-    )
-
-    return build_final_output(entity=entity, metrics=metrics, analysis=analysis)
+    return {"entity": entity, "metrics": metrics}
 
 
 def _main() -> None:
     import argparse
 
-    ap = argparse.ArgumentParser(description="Balance Sheet Agent (deterministic metrics + LLM explanation)")
+    ap = argparse.ArgumentParser(description="Balance Sheet Calculator (deterministic metrics only)")
     ap.add_argument("--json", required=True, help="Path to an OCR output JSON")
-    ap.add_argument("--model", default=None, help="LLM model (default: qwen-plus)")
-    ap.add_argument("--base-url", default=None, help="OpenAI-compatible base URL")
-    ap.add_argument("--api-key", default=None, help="API key (default: env QWEN_API_KEY)")
     ap.add_argument(
         "--out-dir",
         default="balance_sheet_output",
-        help="Directory to write the agent output JSON (default: balance_sheet_output/)",
+        help="Directory to write the output JSON (default: balance_sheet_output/)",
     )
     args = ap.parse_args()
 
-    out = run_balance_sheet_agent(
-        json_path=args.json,
-        model=args.model,
-        base_url=args.base_url,
-        api_key=args.api_key,
-    )
+    out = calculate_balance_sheet_metrics(json_path=args.json)
 
     written = write_agent_output(payload=out, output_dir=args.out_dir)
     print(json.dumps(out, indent=2, ensure_ascii=False))

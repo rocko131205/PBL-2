@@ -1,12 +1,11 @@
-"""Revenue Agent
+"""Revenue Calculator
 
 Loads an OCR-produced JSON (from this repo's `output/` folder), extracts the
-revenue time series, computes deterministic metrics, and uses an LLM *only* to
-turn the metrics into a brief professional explanation.
+revenue time series, and computes deterministic metrics.
 
 Design constraints:
 - All numeric computations happen in Python (pandas/numpy).
-- The LLM must not compute numbers; it only explains provided metrics.
+- This is a pure deterministic service, no LLM integration.
 """
 
 from __future__ import annotations
@@ -20,8 +19,6 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 TrendDirection = Literal["increasing", "declining", "stable"]
 
@@ -262,109 +259,11 @@ def classify_trend(*, slope: float, revenue_mean: float) -> TrendDirection:
 
 
 # ------------------------------
-# LangChain explanation
-# ------------------------------
-
-
-def build_prompt(*, entity: str, metrics: dict[str, Any]) -> list[Any]:
-    """Build chat messages for the explanation step.
-
-    IMPORTANT: Some local models will "helpfully" convert ratios (e.g. 0.875)
-    to percentages (87.5%). To keep the output deterministic and compliant, we
-    exclude ratio-valued metrics from the LLM prompt and have the LLM focus on
-    the growth/trend metrics only.
-
-    The prompt is designed to:
-    - Force the model to use only the provided metrics
-    - Avoid any additional calculations or financial advice
-    """
-
-    metrics_for_llm = {
-        "avg_growth": metrics.get("avg_growth"),
-        "cagr": metrics.get("cagr"),
-        "volatility": metrics.get("volatility"),
-        "trend_direction": metrics.get("trend_direction"),
-    }
-
-    system = (
-        "You are a financial analytics assistant writing a short explanation of revenue performance. "
-        "Hard rules: (1) Do NOT calculate, estimate, or infer any new numbers. "
-        "(2) Use ONLY the provided metrics; do not reference any other financial data (costs, margins, profits, cash flow, balance sheet). "
-        "(3) Do NOT give credit, lending, or investment recommendations. "
-        "(4) Keep a constrained, professional tone and be concise (4-8 sentences)."
-    )
-
-    human = {
-        "task": "Explain the revenue metrics using ONLY the provided values.",
-        "entity": entity,
-        "metric_definitions": {
-            "avg_growth": "Average year-over-year (YoY) revenue growth, in percent.",
-            "cagr": "Compound annual growth rate over the full span, in percent.",
-            "volatility": "Standard deviation of YoY revenue growth (percentage points).",
-            "trend_direction": "Direction based on linear regression slope of revenue over time: increasing/declining/stable.",
-        },
-        "metrics": metrics_for_llm,
-        "output": {
-            "requirements": [
-                "Only discuss revenue growth and trend",
-                "Do not mention profitability, spending, margins, or costs",
-                "Do not mention specific years/periods or the length of the time horizon",
-                "Reference trend_direction explicitly",
-                "No new numbers or ranges",
-            ]
-        },
-    }
-
-    return [SystemMessage(content=system), HumanMessage(content=json.dumps(human, indent=2))]
-
-
-def generate_explanation(
-    *,
-    entity: str,
-    metrics: dict[str, Any],
-    model: str,
-    base_url: str,
-    api_key: str,
-) -> str:
-    """Generate a narrative explanation via LangChain.
-
-    IMPORTANT: This function must never pass raw time series to the LLM.
-    Only the computed metrics are included.
-
-    Note: Ratio-valued metrics are excluded from the prompt in `build_prompt()`
-    to avoid non-deterministic conversions (e.g., 0.875 → 87.5%).
-    """
-
-    llm = ChatOpenAI(
-        model=model,
-        temperature=0,
-        base_url=base_url,
-        api_key=api_key,
-    )
-
-    messages = build_prompt(entity=entity, metrics=metrics)
-    resp = llm.invoke(messages)
-
-    text = getattr(resp, "content", None)
-    if not isinstance(text, str) or not text.strip():
-        raise RuntimeError("LLM returned empty explanation")
-
-    return text.strip()
-
-
-# ------------------------------
 # Orchestration
 # ------------------------------
 
-
-def run_revenue_agent(
-    *,
-    json_path: str | Path,
-    model: str | None = None,
-    base_url: str | None = None,
-    api_key: str | None = None,
-) -> dict[str, Any]:
-    """Run the full agent: load → compute → explain."""
+def calculate_revenue_metrics(json_path: str | Path) -> dict[str, Any]:
+    """Load JSON, validate, and compute deterministic revenue metrics."""
 
     payload = load_json(json_path)
     entity, revenue_series = _extract_revenue_series(payload)
@@ -373,51 +272,24 @@ def run_revenue_agent(
     computed = compute_metrics(df)
     metrics = computed["metrics"]
 
-    resolved_model = model or os.environ.get(
-        "REVENUE_AGENT_MODEL", "qwen2.5-coder-1.5b-instruct-mlx"
-    )
-    resolved_base_url = base_url or os.environ.get(
-        "REVENUE_AGENT_BASE_URL", "http://127.0.0.1:1234/v1"
-    )
-    resolved_api_key = api_key or os.environ.get("REVENUE_AGENT_API_KEY", "local")
-
-    analysis = generate_explanation(
-        entity=entity,
-        metrics=metrics,
-        model=resolved_model,
-        base_url=resolved_base_url,
-        api_key=resolved_api_key,
-    )
-
     return {
         "entity": entity,
         "metrics": metrics,
-        "analysis": analysis,
     }
 
 
 def _main() -> None:
     import argparse
 
-    ap = argparse.ArgumentParser(description="Revenue Agent (deterministic metrics + LLM explanation)")
+    ap = argparse.ArgumentParser(description="Revenue Calculator (deterministic metrics only)")
     ap.add_argument(
         "--json",
         required=True,
         help="Path to an OCR output JSON (e.g. output/Company.json)",
     )
-    ap.add_argument(
-        "--model",
-        default=None,
-        help="Model identifier (default: env REVENUE_AGENT_MODEL or qwen2.5-coder-1.5b-instruct-mlx)",
-    )
-    ap.add_argument(
-        "--base-url",
-        default=None,
-        help="OpenAI-compatible base URL (default: env REVENUE_AGENT_BASE_URL or http://127.0.0.1:1234/v1)",
-    )
     args = ap.parse_args()
 
-    out = run_revenue_agent(json_path=args.json, model=args.model, base_url=args.base_url)
+    out = calculate_revenue_metrics(args.json)
     print(json.dumps(out, indent=2, ensure_ascii=False))
 
 

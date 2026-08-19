@@ -289,3 +289,39 @@ def auto_fetch_missing_fields(
 
     resolved_fields = [f for f in missing_fields if f in resolved]
     return resolved, resolved_fields, errors
+
+# ---------------------------------------------------------------------------
+# Earnings Call Transcripts (FMP)
+# ---------------------------------------------------------------------------
+
+def fetch_latest_earnings_call_transcript(ticker: str, fmp_api_key: str) -> str:
+    """Fetch the most recent earnings call transcript for the ticker using FMP API.
+    
+    Returns a condensed summary of management commentary, or empty string if not found.
+    """
+    if not fmp_api_key or not fmp_api_key.strip():
+        return ""
+        
+    import datetime
+    year = datetime.datetime.now().year
+    
+    # Try fetching the latest transcript by querying the current and previous year
+    url = f"{_FMP_BASE}/earning_call_transcript/{ticker}"
+    
+    for y in [year, year - 1]:
+        params = {"year": y, "apikey": fmp_api_key.strip()}
+        try:
+            resp = requests.get(url, params=params, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                if isinstance(data, list) and len(data) > 0:
+                    # Get the most recent quarter available in that year
+                    latest = data[0]
+                    content = latest.get("content", "")
+                    if content:
+                        # Condense it: keep first 2000 chars as a proxy for the executive summary/opening remarks
+                        return content[:2000] + "...\n[Transcript Truncated]"
+        except Exception:
+            continue
+            
+    return ""

@@ -26,3 +26,6 @@ bcrypt>=4.1             # Password hashing
 PyJWT>=2.8              # JWT token creation / validation
 python-dotenv>=1.0      # Load .env into os.environ
 dnspython>=2.4          # Required for MongoDB Atlas SRV connection strings
+langgraph>=0.1
+pydantic>=2.0
+langchain-core>=0.2
