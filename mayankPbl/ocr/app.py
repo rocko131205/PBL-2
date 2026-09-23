@@ -24,6 +24,7 @@ from src.agent_workflow import run_analysis
 from src.payload_mapper import payload_to_normalized_record
 from src.schema import DSCRInputs, NormalizedCompanyRecord
 from src.debt_service import LoanTerms, compute_dscr_schedule
+from src.credit_scorecard import compute_scorecard
 from src.formatting import format_money, format_ratio, format_percent
 from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
 from src.yfinance_ingestion import fetch_by_ticker
@@ -958,6 +959,8 @@ def _render_debt_serviceability_v3(workflow_state: dict[str, Any]) -> None:
     loan_kwargs = {k: v for k, v in terms_dict.items() if k != "basis"}
     terms = LoanTerms(**loan_kwargs)
     result = compute_dscr_schedule(record, terms, basis=basis)
+    # Persist min DSCR so the credit scorecard can factor in debt-service coverage.
+    st.session_state["v3_min_dscr"] = result.min_dscr
 
     if result.min_dscr is None:
         st.warning("DSCR could not be computed with the available data. " + " ".join(result.notes))
@@ -1066,6 +1069,96 @@ def _render_debt_serviceability_v3(workflow_state: dict[str, Any]) -> None:
             st.markdown(f"- ⚠️ {n}")
 
 
+_GRADE_COLORS = {"AA": "#00FF88", "A": "#00FF88", "BBB": "#00BFFF", "BB": "#FFB000",
+                 "B": "#FF6B35", "CCC": "#FF3333", "D": "#FF3333", "NR": "#888"}
+_STATUS_COLORS = {"strong": "#00FF88", "ok": "#FFB000", "weak": "#FF3333", "missing": "#555"}
+
+
+def _render_credit_scorecard_v3(workflow_state: dict[str, Any]) -> None:
+    """V3 credit scorecard: one industry-aware grade + PD with a transparent breakdown."""
+    record_data = workflow_state.get("company_record")
+    if not record_data:
+        return
+    try:
+        record = NormalizedCompanyRecord(**record_data)
+    except Exception:
+        return
+
+    profile = workflow_state.get("company_profile", {})
+    industry = record.industry or profile.get("industry")
+    min_dscr = st.session_state.get("v3_min_dscr")
+
+    sc = compute_scorecard(record, industry=industry, min_dscr=min_dscr)
+
+    render_section_header("Credit Scorecard", subtitle="V3 · one industry-aware grade, fully broken down")
+
+    if sc.composite_score is None:
+        st.info("Not enough financial data to score this company yet.")
+        return
+
+    color = _GRADE_COLORS.get(sc.grade, "#888")
+
+    # ── Headline grade card ───────────────────────────────────────────────
+    g1, g2 = st.columns([1, 2])
+    with g1:
+        st.markdown(
+            f'<div style="text-align:center;padding:18px;background:#0B0C10;border:1px solid #1E2030;border-radius:6px;border-top:4px solid {color};">'
+            f'<div style="font-size:11px;color:#7A7D96;letter-spacing:0.1em;">CREDIT GRADE</div>'
+            f'<div style="font-size:52px;font-weight:800;color:{color};line-height:1.1;">{sc.grade}</div>'
+            f'<div style="font-size:12px;color:#D8D8E0;">{html.escape(sc.grade_label)}</div>'
+            f'<div style="font-size:11px;color:#7A7D96;margin-top:6px;">Est. default prob: <b style="color:{color};">{html.escape(sc.pd_band)}</b></div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    with g2:
+        pct = sc.composite_score
+        st.markdown(
+            f'<div style="padding:6px 0;"><div style="font-size:12px;color:#7A7D96;">Composite score '
+            f'<b style="color:{color};font-size:16px;">{pct:.0f}</b> / 100 '
+            f'<span style="color:#555;">· industry profile: {html.escape(sc.industry_profile)}</span></div>'
+            f'<div style="height:14px;background:#1E2030;border-radius:7px;overflow:hidden;margin:6px 0 14px 0;">'
+            f'<div style="height:100%;width:{pct:.0f}%;background:{color};"></div></div></div>',
+            unsafe_allow_html=True,
+        )
+        # Bucket bars
+        for b, bscore in sc.buckets.items():
+            if bscore is None:
+                continue
+            bcol = "#00FF88" if bscore >= 70 else "#FFB000" if bscore >= 45 else "#FF3333"
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:10px;margin:3px 0;">'
+                f'<span style="width:130px;font-size:11px;color:#9A9AB0;">{html.escape(b)}</span>'
+                f'<div style="flex:1;height:8px;background:#1E2030;border-radius:4px;overflow:hidden;">'
+                f'<div style="height:100%;width:{bscore:.0f}%;background:{bcol};"></div></div>'
+                f'<span style="width:34px;text-align:right;font-size:11px;color:{bcol};">{bscore:.0f}</span></div>',
+                unsafe_allow_html=True,
+            )
+
+    # ── Factor breakdown ──────────────────────────────────────────────────
+    with st.expander("How this grade was built (factor breakdown)", expanded=True):
+        rows = []
+        for f in sc.factors:
+            rows.append({
+                "Bucket": f.bucket,
+                "Factor": f.name,
+                "Value": f.note,
+                "Score": f"{f.score:.0f}" if f.score is not None else "—",
+                "Weight": f"{f.weight:.0f}%",
+                "Status": f.status,
+            })
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.caption(
+            f"Data coverage: {sc.covered_weight*100:.0f}% of scorecard weight had values. "
+            "Score = each factor graded 0–100 against its industry band; grade = weighted blend."
+        )
+
+    for n in sc.notes:
+        st.markdown(
+            f'<div style="font-size:11px;color:#9A9AB0;margin:4px 0;padding:6px 10px;background:#0B0C10;border-left:3px solid #333;border-radius:2px;">ℹ️ {html.escape(n)}</div>',
+            unsafe_allow_html=True,
+        )
+
+
 def page_analysis() -> None:
     render_section_header("Financial Analysis Output", subtitle="V2 Deterministic Metrics & Credit Assessment")
 
@@ -1081,6 +1174,10 @@ def page_analysis() -> None:
     st.markdown(f'<div style="font-size:13px;color:#7A7D96;margin-bottom:24px;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid #1E2030;padding-bottom:12px;">Entity: <strong style="color:#FFB000;font-size:14px;">{html.escape(entity.upper())}</strong></div>', unsafe_allow_html=True)
 
     workflow_state = outputs.get("workflow_state", {})
+
+    # ── V3: Credit Scorecard headline (grade + PD) ────────────────────────
+    _render_credit_scorecard_v3(workflow_state)
+    render_hr()
 
     # ── V2 DSCR Input Form (if no DSCR inputs provided yet) ───────────────
     dscr_inputs = st.session_state.get("dscr_user_inputs")
