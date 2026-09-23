@@ -62,7 +62,7 @@ def compute_profitability_metrics(record: NormalizedCompanyRecord) -> List[FactL
             if gm < 30:
                 risk, risk_detail = CheckStatus.FAIL, f"Gross margin {gm:.1f}% is critically low"
             elif gm < 50:
-                risk, risk_detail = CheckStatus.WARN, f"Gross margin {gm:.1f}% is below typical SaaS levels (>60%)"
+                risk, risk_detail = CheckStatus.WARN, f"Gross margin {gm:.1f}% is moderate; strong businesses often exceed 50%"
             else:
                 risk, risk_detail = CheckStatus.PASS, f"Gross margin {gm:.1f}% is healthy"
 

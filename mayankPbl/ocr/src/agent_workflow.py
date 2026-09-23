@@ -128,6 +128,18 @@ def _log(state: WorkflowState, msg: str) -> None:
     state.setdefault("workflow_log", []).append(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {msg}")
 
 
+def _is_software_company(profile: Dict[str, Any]) -> bool:
+    """SaaS-specific metrics (Rule of 40, etc.) only make sense for software companies.
+    Running them on a bank or airline produces meaningless numbers."""
+    if profile.get("is_saas") is True:
+        return True
+    subtype = (profile.get("saas_subtype") or "").lower()
+    if subtype and subtype not in ("non_saas", "n/a", "none", ""):
+        return True
+    industry = (profile.get("industry") or "").lower()
+    return any(k in industry for k in ("software", "saas", "internet", "cloud", "technology"))
+
+
 # -------------------------------------------------------------------------
 # Node 1: Company Intelligence Agent
 # -------------------------------------------------------------------------
@@ -265,13 +277,16 @@ def financial_computation_node(state: WorkflowState) -> WorkflowState:
     except Exception as exc:
         state.setdefault("errors", []).append(f"Solvency calc: {exc}")
 
-    # SaaS metrics
-    try:
-        saas = compute_saas_metrics(record)
-        all_entries.extend(saas)
-        _log(state, f"Financial Computation: {len(saas)} SaaS metrics computed")
-    except Exception as exc:
-        state.setdefault("errors", []).append(f"SaaS calc: {exc}")
+    # SaaS metrics — only for software companies (meaningless for a bank/airline/etc.)
+    if _is_software_company(state.get("company_profile", {})):
+        try:
+            saas = compute_saas_metrics(record)
+            all_entries.extend(saas)
+            _log(state, f"Financial Computation: {len(saas)} SaaS metrics computed")
+        except Exception as exc:
+            state.setdefault("errors", []).append(f"SaaS calc: {exc}")
+    else:
+        _log(state, "Financial Computation: SaaS metrics skipped (not a software company)")
 
     # DSCR
     dscr_input_data = state.get("dscr_inputs", {})

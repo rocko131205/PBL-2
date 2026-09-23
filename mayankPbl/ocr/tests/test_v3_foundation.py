@@ -109,3 +109,17 @@ class TestCompleteness:
         assert "operating_cash_flow" in c["present"]
         assert c["present_count"] == 2
         assert 0 < c["score"] < 100
+
+
+class TestSaaSGating:
+    def test_software_detected(self):
+        from src.agent_workflow import _is_software_company
+        assert _is_software_company({"is_saas": True})
+        assert _is_software_company({"saas_subtype": "CRM"})
+        assert _is_software_company({"industry": "Application Software"})
+
+    def test_non_software_skipped(self):
+        from src.agent_workflow import _is_software_company
+        assert not _is_software_company({"industry": "Banks", "saas_subtype": "non_saas"})
+        assert not _is_software_company({"industry": "Airlines"})
+        assert not _is_software_company({})
