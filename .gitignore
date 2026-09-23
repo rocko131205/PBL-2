@@ -1,9 +1,9 @@
+# macOS
+.DS_Store
+
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-.Python
 .pytest_cache/
 
 # Virtual environments
@@ -17,9 +17,6 @@ env/
 # Runtime output (generated at runtime, not source code)
 output/
 input_pdfs/
-
-# macOS
-.DS_Store
 
 # IDEs
 .idea/

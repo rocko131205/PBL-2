@@ -29,3 +29,6 @@ dnspython>=2.4          # Required for MongoDB Atlas SRV connection strings
 langgraph>=0.1
 pydantic>=2.0
 langchain-core>=0.2
+
+# ── Testing ─────────────────────────────────────────────────────────────────
+pytest>=8.0

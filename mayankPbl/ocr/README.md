@@ -280,33 +280,37 @@ Period format is always `YYYY-FY` (annual) or `YYYY-QN` (quarterly). The parser 
 
 ## Project Structure
 
+> For the full story of how the architecture evolved (V1 → V2 → V3), see
+> [`../../VERSION_HISTORY.md`](../../VERSION_HISTORY.md).
+
 ```
 ocr/
-├── app.py                           # Main Streamlit app (4 pages, ~1050 lines)
+├── app.py                           # Main Streamlit app (UI + pipeline wiring)
 ├── requirements.txt
-├── AGENTS.md                        # Developer reference for the pipeline
-│
-├── agents/                          # Thin wrappers (Streamlit-facing entry points)
-│   ├── revenue_agent.py
-│   ├── balance_sheet_agent.py
-│   ├── liquidity_agent.py
-│   ├── sentiment_agent.py
-│   └── cross_reference_agent.py
+├── AGENTS.md                        # Developer reference for the OCR pipeline
 │
 ├── src/                             # Core logic
+│   │  ── V2 architecture ──
+│   ├── schema.py                    # Fact Ledger + all data models (the contract)
+│   ├── agent_workflow.py            # LangGraph orchestration (5 agent nodes)
+│   ├── dscr_engine.py               # Real DSCR calculation (methodology-aware)
+│   ├── profitability_calculator.py  # Margins, ROE, ROA, ROCE
+│   ├── solvency_calculator.py       # Leverage / debt ratios
+│   ├── liquidity_calculator.py      # Current ratio, working capital
+│   ├── revenue_calculator.py        # Growth, CAGR
+│   ├── saas_engine.py               # SaaS metrics from actual growth
+│   ├── risk_indicator_engine.py     # Consolidated risk dashboard
+│   ├── payload_mapper.py            # Raw payload → NormalizedCompanyRecord
+│   ├── data_verifier.py             # Credibility scoring engine
+│   ├── supplemental_fetchers.py     # FMP + Alpha Vantage auto-fill
+│   ├── yfinance_ingestion.py        # Ticker-based data fetch
+│   ├── private_company_ingestion.py # CSV/Excel ingestion
+│   │  ── PDF OCR pipeline ──
 │   ├── extractor.py                 # pdfplumber → PDFContent
 │   ├── parser.py                    # PDFContent → ParsedStatement
 │   ├── mapper.py                    # Bloomberg label → canonical key
 │   ├── builder.py                   # ParsedStatement[] → company JSON
-│   ├── main.py                      # CLI entry point
-│   ├── revenue_agent.py             # Full agent implementation
-│   ├── balance_sheet_agent.py
-│   ├── liquidity_agent.py
-│   ├── sentiment_agent.py
-│   ├── data_verifier.py             # Credibility scoring engine
-│   ├── supplemental_fetchers.py     # FMP + Alpha Vantage auto-fill
-│   ├── yfinance_ingestion.py        # Ticker-based data fetch
-│   └── private_company_ingestion.py # CSV/Excel ingestion
+│   └── main.py                      # CLI entry point
 │
 ├── ocr/
 │   └── pdf_parser.py                # Streamlit-facing OCR wrapper
@@ -315,8 +319,10 @@ ocr/
 │   ├── dashboard_components.py      # render_* functions, theme injection
 │   └── styles.css                   # Full CSS design system (dark/light)
 │
-├── input_pdfs/                      # Drop PDFs here for CLI mode
-└── output/                          # Agent JSON outputs written here
+├── auth/                            # Login, MongoDB, JWT, email OTP
+├── tests/                           # 52 tests (test_calculators, test_integration)
+├── input_pdfs/                      # Drop PDFs here for CLI mode (gitignored)
+└── output/                          # JSON outputs written at runtime (gitignored)
 ```
 
 ---
@@ -353,10 +359,11 @@ FinVeritas is **not** a regulatory reporting tool. It does not compute capital a
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Stable production branch |
-| `ASSHUL` | Base feature integration |
+| `V2-final` | **CURRENT BRANCH:** V2 deterministic architecture (Fact Ledger + LangGraph), auth loop, and repo cleanup |
+| `v2-review2` | V2 review checkpoint |
 | `avi` | UI Revamp — FinVeritas rebranding, theme system, credibility engine |
-| `final` | **CURRENT BRANCH:** Core authentication loop, .env pipeline, guardrails, and completely polished UI |
+| `ASSHUL` | Base feature integration |
+| `final` | Earlier polished-UI checkpoint |
 
 ---
 

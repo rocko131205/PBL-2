@@ -18,7 +18,6 @@ from typing import Any, Dict
 from src.dscr_engine import compute_dscr, dscr_to_fact_entry
 from src.payload_mapper import payload_to_normalized_record
 from src.profitability_calculator import compute_profitability_metrics
-from src.report_generator import generate_report_sections
 from src.risk_indicator_engine import build_risk_dashboard
 from src.saas_engine import compute_saas_metrics
 from src.schema import (
@@ -259,24 +258,6 @@ class TestEndToEndPrivateCompany(unittest.TestCase):
         all_entries = compute_profitability_metrics(self.record) + compute_solvency_metrics(self.record)
         dashboard = build_risk_dashboard(self.record, all_entries)
         self.assertIsInstance(dashboard, RiskDashboard)
-
-
-class TestReportGenerator(unittest.TestCase):
-    """Tests the report generator produces correct structure."""
-
-    def test_report_sections_structure(self):
-        report = CreditAssessmentReport(
-            entity_id="Test Co.",
-            analysis_date="2024-01-01T00:00:00Z",
-            currency="USD",
-            risk_classification=RiskLevel.MODERATE,
-            recommendation_narrative="Test narrative",
-        )
-        sections = generate_report_sections(report)
-        self.assertIn("executive_summary", sections)
-        self.assertIn("financial_metrics", sections)
-        self.assertIn("recommendation", sections)
-        self.assertEqual(sections["executive_summary"]["overall_risk"], "MODERATE")
 
 
 class TestNoHallucination(unittest.TestCase):
