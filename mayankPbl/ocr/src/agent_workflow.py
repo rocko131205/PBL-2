@@ -128,6 +128,42 @@ def _log(state: WorkflowState, msg: str) -> None:
     state.setdefault("workflow_log", []).append(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {msg}")
 
 
+import re as _re
+
+
+def _extract_json(text: Optional[str]) -> Optional[Any]:
+    """Robustly pull a JSON object/array out of an LLM response.
+
+    Tries: direct parse → each fenced ``` block → first {...}/[...] span.
+    Returns the parsed value or None (never raises). Replaces the fragile
+    split-on-``` approach used across the nodes."""
+    if not text:
+        return None
+    t = text.strip()
+    try:
+        return json.loads(t)
+    except Exception:
+        pass
+    if "```" in t:
+        for part in t.split("```"):
+            p = part.strip()
+            if p.lower().startswith("json"):
+                p = p[4:].strip()
+            if p and p[0] in "{[":
+                try:
+                    return json.loads(p)
+                except Exception:
+                    continue
+    for pattern in (r"\{.*\}", r"\[.*\]"):
+        m = _re.search(pattern, t, _re.DOTALL)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                continue
+    return None
+
+
 def _is_software_company(profile: Dict[str, Any]) -> bool:
     """SaaS-specific metrics (Rule of 40, etc.) only make sense for software companies.
     Running them on a bank or airline produces meaningless numbers."""
@@ -198,15 +234,8 @@ def company_intelligence_node(state: WorkflowState) -> WorkflowState:
             HumanMessage(content=classification_prompt),
         ])
 
-        try:
-            text = resp.content.strip()
-            # Extract JSON from response
-            if "```" in text:
-                text = text.split("```")[1].strip()
-                if text.startswith("json"):
-                    text = text[4:].strip()
-            profile = json.loads(text)
-        except (json.JSONDecodeError, IndexError):
+        profile = _extract_json(resp.content)
+        if not isinstance(profile, dict):
             profile = {
                 "country": "US" if currency == "USD" else ("IN" if currency == "INR" else None),
                 "is_saas": None,
@@ -376,14 +405,8 @@ def peer_analysis_node(state: WorkflowState) -> WorkflowState:
             HumanMessage(content=peer_prompt),
         ])
 
-        try:
-            text = resp.content.strip()
-            if "```" in text:
-                text = text.split("```")[1].strip()
-                if text.startswith("json"):
-                    text = text[4:].strip()
-            raw_peer_tickers = json.loads(text)
-        except (json.JSONDecodeError, IndexError):
+        raw_peer_tickers = _extract_json(resp.content)
+        if not isinstance(raw_peer_tickers, list):
             raw_peer_tickers = []
             _log(state, "Peer Analysis Agent: LLM peer identification failed")
 
@@ -579,16 +602,12 @@ def qualitative_analysis_node(state: WorkflowState) -> WorkflowState:
             HumanMessage(content=prompt),
         ])
 
-        try:
-            text = resp.content.strip()
-            if "```" in text:
-                text = text.split("```")[1].strip()
-                if text.startswith("json"):
-                    text = text[4:].strip()
-            findings = json.loads(text)
-            if not isinstance(findings, list):
-                findings = [str(findings)]
-        except (json.JSONDecodeError, IndexError):
+        findings = _extract_json(resp.content)
+        if isinstance(findings, list):
+            findings = [str(f) for f in findings]
+        elif findings is not None:
+            findings = [str(findings)]
+        else:
             findings = [f"Qualitative context available but structured extraction failed: {qualitative_text[:200]}..."]
 
     except Exception as exc:
@@ -695,19 +714,17 @@ def credit_assessment_node(state: WorkflowState) -> WorkflowState:
             HumanMessage(content=synthesis_prompt),
         ])
 
-        try:
-            text = resp.content.strip()
-            if "```" in text:
-                text = text.split("```")[1].strip()
-                if text.startswith("json"):
-                    text = text[4:].strip()
-            synthesis = json.loads(text)
-            strengths = synthesis.get("strengths", [])
-            risks = synthesis.get("risks", [])
-            recommendation = synthesis.get("narrative", "")
-        except (json.JSONDecodeError, IndexError):
-            recommendation = "Credit assessment narrative could not be generated."
-            _log(state, "Credit Assessment Agent: LLM synthesis failed — structured data still available")
+        synthesis = _extract_json(resp.content)
+        if isinstance(synthesis, dict):
+            strengths = synthesis.get("strengths", []) or []
+            risks = synthesis.get("risks", []) or []
+            recommendation = synthesis.get("narrative", "") or ""
+        if not recommendation:
+            # Fall back to the raw text if it wasn't valid JSON but has content.
+            raw = (resp.content or "").strip()
+            recommendation = raw if raw else "Credit assessment narrative could not be generated."
+            if not isinstance(synthesis, dict):
+                _log(state, "Credit Assessment Agent: LLM synthesis not valid JSON — used raw text")
 
     except Exception as exc:
         recommendation = f"Credit assessment narrative generation failed: {exc}"
