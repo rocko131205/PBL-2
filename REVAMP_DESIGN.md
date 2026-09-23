@@ -138,12 +138,14 @@ gracefully to the deterministic data with a clear "narrative unavailable" note.
 - [x] De-SaaS the engine (SaaS metrics only for software companies)
 - [x] AI: guardrailed **"Explain this"** + scoped **"Ask about this company"** chat
 - [x] **Anomaly/alerts engine** (swings, sign flips, identity breaks, impossible values)
-- [ ] Inline DSCR (kill the re-run round-trip)
-- [ ] "What this means" one-liner on every metric + consistent status colors
-- [ ] AI: harden the workflow narrative (structured output so it never comes back blank)
+- [x] Inline DSCR (removed the go-back-and-re-run round-trip)
+- [x] "What this means" one-liner on every metric
+- [x] AI: hardened the workflow JSON parsing (narrative no longer comes back blank)
+- [x] Working-capital cycle engine (DSO/DIO/DPO/CCC)
+- [x] V2 liquidity engine + retired the duplicate V1 calculators
+- [x] Renamed LM_STUDIO_BASE_URL → LLM_BASE_URL (you're on Groq, not LM Studio)
 - [ ] Peer view: currency-normalized + percentiles + radar
-- [ ] Persist analyses (history / compare over time)
-- [ ] Working-capital cycle engine (needs receivables/inventory/payables ingestion)
-- [ ] Retire duplicate V1 calculators; final polish pass
+- [ ] Persist analyses to MongoDB (history / compare over time)
+- [ ] Final visual polish pass (needs your screenshots — building blind)
 
 *Last updated: 2026-09-24. Built on branch `V3-revamp`.*
