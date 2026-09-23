@@ -29,6 +29,7 @@ from src.credit_memo import build_memo, render_memo_html
 from src.forecast import forecast_field
 from src.ai_assistant import explain_results, answer_question
 from src.anomaly_engine import detect_anomalies
+from src.metric_meanings import meaning_for
 from src.formatting import format_money, format_ratio, format_percent
 from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
 from src.yfinance_ingestion import fetch_by_ticker
@@ -1530,6 +1531,9 @@ def page_analysis() -> None:
                         <span class="bb-mkey">{html.escape(name)}</span>
                         <span class="bb-mval" style="color:{val_color};">{html.escape(str(display_val))}</span>
                     </div>'''
+                    _m = meaning_for(entry.get("metric"))
+                    if _m:
+                        saas_html += f'<div style="font-size:10px;color:#7A7D96;margin:-6px 0 6px 0;">{html.escape(_m)}</div>'
                     if risk_detail:
                         saas_html += f'<div style="font-size:10px;color:#7A7D96;margin:-4px 0 6px 0;padding-left:12px;">{html.escape(risk_detail)}</div>'
 
@@ -1569,6 +1573,9 @@ def page_analysis() -> None:
                         <span class="bb-mkey">{html.escape(name)}</span>
                         <span class="bb-mval" style="color:{val_color};">{html.escape(display_val)}</span>
                     </div>'''
+                    _m = meaning_for(entry.get("metric"))
+                    if _m:
+                        cat_html += f'<div style="font-size:10px;color:#7A7D96;margin:-6px 0 8px 0;">{html.escape(_m)}</div>'
                 cat_html += '</div>'
                 st.markdown(cat_html, unsafe_allow_html=True)
                 
@@ -1747,6 +1754,9 @@ def page_analysis() -> None:
                         <span class="bb-mkey">{html.escape(name)}</span>
                         <span class="bb-mval" style="color:{val_color};">{html.escape(display_val)}</span>
                     </div>'''
+                    _m = meaning_for(entry.get("metric"))
+                    if _m:
+                        cat_html += f'<div style="font-size:10px;color:#7A7D96;margin:-6px 0 8px 0;">{html.escape(_m)}</div>'
                 cat_html += '</div>'
                 st.markdown(cat_html, unsafe_allow_html=True)
                 
