@@ -25,6 +25,7 @@ from src.payload_mapper import payload_to_normalized_record
 from src.schema import DSCRInputs, NormalizedCompanyRecord
 from src.debt_service import LoanTerms, compute_dscr_schedule
 from src.credit_scorecard import compute_scorecard
+from src.credit_memo import build_memo, render_memo_html
 from src.formatting import format_money, format_ratio, format_percent
 from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
 from src.yfinance_ingestion import fetch_by_ticker
@@ -1159,6 +1160,63 @@ def _render_credit_scorecard_v3(workflow_state: dict[str, Any]) -> None:
         )
 
 
+def _render_credit_memo_v3(workflow_state: dict[str, Any]) -> None:
+    """V3 one-page Credit Memo with printable/exportable HTML download."""
+    record_data = workflow_state.get("company_record")
+    if not record_data:
+        return
+    try:
+        record = NormalizedCompanyRecord(**record_data)
+    except Exception:
+        return
+
+    render_hr()
+    render_section_header("Credit Memo", subtitle="V3 · one-page summary — download & print to PDF")
+
+    profile = workflow_state.get("company_profile", {})
+    industry = record.industry or profile.get("industry")
+    min_dscr = st.session_state.get("v3_min_dscr")
+    sc = compute_scorecard(record, industry=industry, min_dscr=min_dscr)
+
+    credit_report = workflow_state.get("credit_report") or {}
+    dscr_result = workflow_state.get("dscr_result") or {}
+    dscr_risk = dscr_result.get("risk_level") if dscr_result else None
+
+    memo = build_memo(
+        record, sc,
+        min_dscr=min_dscr,
+        dscr_risk=dscr_risk,
+        strengths=credit_report.get("major_strengths", []),
+        risks=credit_report.get("major_risks", []),
+        recommendation=credit_report.get("recommendation_narrative", ""),
+    )
+    memo_html = render_memo_html(memo)
+
+    col_a, col_b = st.columns([2, 1])
+    with col_a:
+        st.markdown(
+            f'<div style="font-size:13px;color:#D8D8E0;">Grade <b style="color:#00BFFF;">{html.escape(memo.grade)}</b> '
+            f'({html.escape(memo.grade_label)}) · PD {html.escape(memo.pd_band)}'
+            + (f' · Min DSCR {memo.dscr_summary["min_dscr"]:.2f}x' if memo.dscr_summary else "")
+            + '</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption("A clean lender-style memo assembling grade, highlights, strengths/risks and the assessment.")
+    with col_b:
+        safe_name = "".join(c if c.isalnum() else "_" for c in memo.entity_id)[:40]
+        st.download_button(
+            "⬇ Download Credit Memo (HTML → print to PDF)",
+            data=memo_html,
+            file_name=f"credit_memo_{safe_name}.html",
+            mime="text/html",
+            use_container_width=True,
+        )
+
+    with st.expander("Preview memo contents"):
+        for h in memo.highlights:
+            st.markdown(f"- **{h['label']}**: {h['value']}")
+
+
 def page_analysis() -> None:
     render_section_header("Financial Analysis Output", subtitle="V2 Deterministic Metrics & Credit Assessment")
 
@@ -1521,6 +1579,9 @@ def page_analysis() -> None:
         render_section_header("Qualitative Corporate Intelligence", subtitle="Extracted from management commentary")
         for f in qual_findings:
             st.markdown(f'<div style="font-size:12px;color:#CC88FF;margin:4px 0;padding:6px 10px;background:#0D0020;border-left:3px solid #CC88FF;border-radius:2px;">{html.escape(str(f))}</div>', unsafe_allow_html=True)
+
+    # ── V3: Credit Memo (printable / exportable) ──────────────────────────
+    _render_credit_memo_v3(workflow_state)
 
     # ── Workflow Log ──────────────────────────────────────────────────────
     workflow_log = workflow_state.get("workflow_log", [])
