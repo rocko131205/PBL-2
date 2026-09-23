@@ -1082,6 +1082,51 @@ _GRADE_COLORS = {"AA": "#00FF88", "A": "#00FF88", "BBB": "#00BFFF", "BB": "#FFB0
 _STATUS_COLORS = {"strong": "#00FF88", "ok": "#FFB000", "weak": "#FF3333", "missing": "#555"}
 
 
+def _render_verdict_banner_v3(workflow_state: dict[str, Any]) -> None:
+    """A one-line plain-language verdict at the very top of the results."""
+    record_data = workflow_state.get("company_record")
+    if not record_data:
+        return
+    try:
+        record = NormalizedCompanyRecord(**record_data)
+    except Exception:
+        return
+
+    profile = workflow_state.get("company_profile", {})
+    industry = record.industry or profile.get("industry")
+    min_dscr = st.session_state.get("v3_min_dscr")
+    sc = compute_scorecard(record, industry=industry, min_dscr=min_dscr)
+
+    if sc.composite_score is None:
+        return
+
+    color = _GRADE_COLORS.get(sc.grade, "#888")
+
+    # Weakest scored factor = the headline watch item.
+    scored = [f for f in sc.factors if f.score is not None]
+    watch = min(scored, key=lambda f: f.score) if scored else None
+    watch_txt = ""
+    if watch and watch.score < 55:
+        watch_txt = f" · <span style='color:#FF6B35;'>Watch: {html.escape(watch.name.lower())} ({html.escape(watch.note)})</span>"
+
+    dscr_txt = ""
+    if min_dscr is not None:
+        dcol = "#00FF88" if min_dscr >= 1.5 else "#FFB000" if min_dscr >= 1.0 else "#FF3333"
+        dscr_txt = f" · <span style='color:{dcol};'>Min DSCR {min_dscr:.2f}x</span>"
+
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:14px;padding:14px 18px;background:#0B0C10;'
+        f'border:1px solid #1E2030;border-left:5px solid {color};border-radius:6px;margin-bottom:8px;">'
+        f'<div style="font-size:26px;font-weight:800;color:{color};">{html.escape(sc.grade)}</div>'
+        f'<div style="font-size:13px;color:#D8D8E0;line-height:1.5;">'
+        f'<b style="color:{color};">{html.escape(sc.grade_label)}</b> · composite {sc.composite_score:.0f}/100'
+        f'{dscr_txt}{watch_txt}<br>'
+        f'<span style="font-size:11px;color:#7A7D96;">Decision-support only — not a lending decision. '
+        f'Scroll for the full breakdown.</span></div></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def _render_credit_scorecard_v3(workflow_state: dict[str, Any]) -> None:
     """V3 credit scorecard: one industry-aware grade + PD with a transparent breakdown."""
     record_data = workflow_state.get("company_record")
@@ -1303,6 +1348,9 @@ def page_analysis() -> None:
     st.markdown(f'<div style="font-size:13px;color:#7A7D96;margin-bottom:24px;text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid #1E2030;padding-bottom:12px;">Entity: <strong style="color:#FFB000;font-size:14px;">{html.escape(entity.upper())}</strong></div>', unsafe_allow_html=True)
 
     workflow_state = outputs.get("workflow_state", {})
+
+    # ── V3: Verdict banner (one-line summary) ─────────────────────────────
+    _render_verdict_banner_v3(workflow_state)
 
     # ── V3: Credit Scorecard headline (grade + PD) ────────────────────────
     _render_credit_scorecard_v3(workflow_state)
