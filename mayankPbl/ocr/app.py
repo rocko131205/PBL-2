@@ -450,11 +450,11 @@ def _render_agent_status_badges(payload: dict[str, Any], news_api_key: str) -> N
 
     cols = st.columns(5)
     statuses = [
-        ("REVENUE",       "revenue" in avail,                         "#FFB000"),
-        ("LIQUIDITY",     not missing_liq,                             "#00BFFF"),
-        ("BALANCE SHEET", not missing_bs,                              "#FF6B35"),
-        ("SENTIMENT",     bool(news_api_key and news_api_key.strip()), "#CC88FF"),
-        ("CROSS REF",     not missing_liq and not missing_bs,          "#00FF88"),
+        ("REVENUE",      "revenue" in avail,                       "#FFB000"),
+        ("LIQUIDITY",    not missing_liq,                          "#00BFFF"),
+        ("SOLVENCY",     not missing_bs,                           "#FF6B35"),
+        ("CASH FLOW",    "operating_cash_flow" in avail,           "#CC88FF"),
+        ("CREDIT SCORE", ("revenue" in avail) and not missing_bs,  "#00FF88"),
     ]
     for col, (name, ready, colour) in zip(cols, statuses):
         c = colour if ready else "#444"
@@ -855,9 +855,9 @@ def page_workflow() -> None:
                 </div>
             </div>
             <div style="display:flex;margin-bottom:16px;border-bottom:1px solid #1A1C23;padding-bottom:14px;">
-                <div style="width:200px;font-size:12px;color:#CC88FF;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">Sentiment Agent</div>
+                <div style="width:200px;font-size:12px;color:#CC88FF;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">Debt Service &amp; Scorecard</div>
                 <div style="flex:1;font-size:13px;color:#9A9AB0;font-family:'Inter',sans-serif;line-height:1.6;">
-                    <strong style="color:#D8D8E0;">Context Boundary:</strong> Limited to parsing NewsAPI top articles from the last 30 days. Cannot hallucinate past events beyond given API payload.
+                    <strong style="color:#D8D8E0;">Deterministic Underwriting:</strong> Builds the year-by-year DSCR schedule, stress tests, and the industry-aware credit grade in pure Python. The LLM never sets a ratio, grade, or default probability.
                 </div>
             </div>
             <div style="display:flex;">
@@ -1659,17 +1659,20 @@ def page_analysis() -> None:
             for log_entry in workflow_log:
                 st.markdown(f'<span style="font-size:10px;color:#7A7D96;font-family:monospace;">{html.escape(str(log_entry))}</span>', unsafe_allow_html=True)
 
-    # ── Raw Agent Outputs (Audit Trail) ───────────────────────────────────
+    # ── Developer / Audit data (hidden by default) ────────────────────────
     render_hr()
-    render_section_header("Raw Agent Outputs", subtitle="Full JSON — audit trail")
-    for label, key in [
-        ("Revenue Calculator", "revenue"),
-        ("Liquidity Calculator", "liquidity"),
-        ("Balance Sheet Calculator", "balance_sheet"),
-        ("V2 Workflow State", "workflow_state"),
-    ]:
-        with st.expander(f"{label}"):
-            st.json(outputs.get(key, {}))
+    show_dev = st.checkbox("🔧 Show developer / audit data (raw JSON)", value=False,
+                           help="The full computed data behind every number — for auditing, not everyday use.")
+    if show_dev:
+        render_section_header("Raw Agent Outputs", subtitle="Full JSON — audit trail")
+        for label, key in [
+            ("Revenue Calculator", "revenue"),
+            ("Liquidity Calculator", "liquidity"),
+            ("Balance Sheet Calculator", "balance_sheet"),
+            ("V2 Workflow State", "workflow_state"),
+        ]:
+            with st.expander(f"{label}"):
+                st.json(outputs.get(key, {}))
 
 
 # ── Page 4 ────────────────────────────────────────────────────────────────────

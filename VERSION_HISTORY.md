@@ -127,27 +127,35 @@ V3 has two parts: (A) the cleanup already completed, and (B) the features planne
 
 *Result: same working app, dramatically cleaner and lighter repository.*
 
-### (B) Roadmap — planned, NOT built yet 🚧
+### (B) Revamp build — done on branch `V3-revamp` ✅
 
-In rough priority order (highest value first):
+Built in tested, committed phases (109 tests passing):
 
-1. **Industry-aware thresholds** — judge a bank like a bank, a SaaS like a SaaS. This is
-   the most important correctness fix.
-2. **Charts / visualizations** — trend lines, peer bars, a DSCR gauge. Biggest visual win.
-3. **Remove the duplicate V1 calculators** so there is one source of truth for each number.
-4. **Harden the LLM layer** — reliable JSON parsing + option for a stronger model.
-5. **Save reports to MongoDB** so users have a history.
-6. **Activate or remove qualitative/sentiment** so there are no empty panels.
+1. **Phase 1 — Data foundation** (`currency.py`, `formatting.py`, schema + ingestion):
+   currency normalization to a base currency, readable money (K/M/B/T + symbol,
+   fixes "256,345,567M"), cash-flow statement ingestion, data-completeness report.
+2. **Phase 2 — Real DSCR engine** (`debt_service.py`): selectable numerator
+   (EBITDA/EBIT/OCF/CFADS), full amortization schedule, per-year + **minimum DSCR**,
+   **stress testing** (revenue haircuts, rate shocks), coverage ratios. Wired into the UI.
+3. **Phase 3 — Credit scorecard** (`credit_scorecard.py`): one industry-aware
+   **grade + PD** with a transparent factor breakdown. Fixes the "SaaS thresholds for
+   everyone" bug. Wired into the UI.
+4. **Phase 4 — Credit Memo** (`credit_memo.py`): one-page lender memo with printable
+   HTML export (browser print-to-PDF). Wired into the UI.
+5. **Phase 5 — Forecasting + charts** (`forecast.py`): revenue history + 3-year
+   projection (base/optimistic/pessimistic) and a margin-trend chart. First real charts.
+6. **Phase 6 — Polish**: removed ghost "Sentiment" UI, updated landing text and the
+   readiness badges to the real pipeline, moved raw JSON behind a developer toggle.
 
-New capability agents from the *V2 Master Implementation Brief* (each is a bigger build —
-do one fully rather than many half-done):
-- Forecasting (forward-looking analysis)
-- Assumption Validation
-- Competitive Intelligence
-- Anomaly / Alert detection
-- Working Capital & MPBF credit intelligence
-- Geography-wise impact
-- Executive / Governance background
+### (C) Still on the roadmap 🚧
+
+- Remove the duplicate V1 calculators (one source of truth per number).
+- Harden the LLM layer (reliable JSON parsing + stronger-model option).
+- Persist analyses to MongoDB (history + compare over time).
+- Peer percentile positioning + radar chart.
+- Further capability agents from the *V2 Master Implementation Brief*:
+  Assumption Validation, Anomaly/Alert detection, Working Capital & MPBF,
+  Geography-wise impact, Executive/Governance background.
 
 ---
 
@@ -181,4 +189,4 @@ PBL-2/
     └── tests/                  ← 52 tests (test_calculators.py, test_integration.py)
 ```
 
-*Last updated: 2026-09-23.*
+*Last updated: 2026-09-24 (V3 revamp phases 1–6 built on branch `V3-revamp`).*

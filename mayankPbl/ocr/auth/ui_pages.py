@@ -326,8 +326,8 @@ _RIGHT_PANEL_HTML = """<!DOCTYPE html>
       <div class="pill">
         <span class="pill-icon">🤖</span>
         <div class="pill-text">
-          <strong>5 Explainable AI Agents</strong>
-          Revenue · Liquidity · Balance Sheet · Sentiment · Cross-Ref
+          <strong>Explainable Credit Analysis</strong>
+          Deterministic metrics · DSCR & stress · Credit grade · Peer benchmark
         </div>
       </div>
       <div class="pill">
