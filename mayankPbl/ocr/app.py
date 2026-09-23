@@ -55,7 +55,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_DEFAULT_BASE_URL     = os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234/v1")
+_DEFAULT_BASE_URL     = os.getenv("LLM_BASE_URL") or os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234/v1")
 _DEFAULT_MODEL        = os.getenv("LLM_MODEL", "qwen2.5-coder-1.5b-instruct-mlx")
 _DEFAULT_API_KEY      = os.getenv("LLM_API_KEY", "local")
 _DEFAULT_NEWS_API_KEY = os.getenv("NEWSAPI_KEY", "")

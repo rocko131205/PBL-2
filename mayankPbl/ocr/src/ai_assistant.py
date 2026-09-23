@@ -32,7 +32,7 @@ _GUARDRAIL = (
 
 def _llm_config() -> Dict[str, str]:
     return {
-        "base_url": os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234/v1"),
+        "base_url": os.getenv("LLM_BASE_URL") or os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234/v1"),
         "model": os.getenv("LLM_MODEL", "qwen2.5-coder-1.5b-instruct-mlx"),
         "api_key": os.getenv("LLM_API_KEY", "local"),
     }

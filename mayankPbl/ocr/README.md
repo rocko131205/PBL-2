@@ -167,7 +167,7 @@ SMTP_PASS=your_app_password
 NEWSAPI_KEY=your_news_key
 FMP_API_KEY=your_fmp_key
 LLM_API_KEY=local
-LM_STUDIO_BASE_URL=http://127.0.0.1:1234/v1
+LLM_BASE_URL=http://127.0.0.1:1234/v1   # any OpenAI-compatible endpoint (LM Studio, Groq, Ollama, OpenAI…)
 LLM_MODEL=qwen2.5-coder-1.5b-instruct-mlx
 ```
 
