@@ -17,9 +17,6 @@ import pandas as pd
 import streamlit as st
 from streamlit_agraph import Config, Edge, Node, agraph
 
-from src.revenue_calculator import calculate_revenue_metrics
-from src.balance_sheet_calculator import calculate_balance_sheet_metrics
-from src.liquidity_calculator import calculate_liquidity_metrics
 from src.agent_workflow import run_analysis
 from src.payload_mapper import payload_to_normalized_record
 from src.schema import DSCRInputs, NormalizedCompanyRecord
@@ -389,21 +386,13 @@ def _run_agent_pipeline(
     api_key: str,
     news_api_key: str,
 ) -> None:
-    """Run V2 Agent Pipeline: Deterministic Calculators + Agentic Workflow."""
+    """Run the V2/V3 agentic workflow (all metrics come from the deterministic fact ledger)."""
 
-    # 1. Deterministic Calculators (No LLM) — V1 calculators still run for backward compat
-    rev_path = agent_paths["revenue"]
-    bs_path  = agent_paths["balance_sheet"]
-    liq_path = agent_paths["liquidity"]
-    entity   = str(payload.get("entity", {}).get("entity_id") or "UNKNOWN")
+    entity = str(payload.get("entity", {}).get("entity_id") or "UNKNOWN")
 
-    with st.spinner("Computing Deterministic Metrics..."):
-        rev_out = _safe_run("Revenue Calculator", lambda: calculate_revenue_metrics(json_path=rev_path))
-        liq_out = _safe_run("Liquidity Calculator", lambda: calculate_liquidity_metrics(json_path=liq_path))
-        bs_out = _safe_run("Balance Sheet Calculator", lambda: calculate_balance_sheet_metrics(json_path=bs_path))
-
-    # 2. V2 Agentic Workflow (Company Intelligence → Financial Computation → Peer Analysis → Credit Assessment)
-    st.markdown("### V2 Agentic Orchestration")
+    # V2/V3 Agentic Workflow — all financial metrics (profitability, liquidity, solvency,
+    # DSCR, etc.) are computed deterministically inside the workflow's fact ledger.
+    st.markdown("### Agentic Orchestration")
 
     # Determine source type from active session
     active_source = st.session_state.get("active_source", "pdf")
@@ -429,12 +418,9 @@ def _run_agent_pipeline(
             st.code(traceback.format_exc(), language="text")
             result_state = {"errors": [str(e)]}
 
-    # Save results to session state — V2 structure
+    # Save results to session state — V3 structure (single source of truth: the fact ledger)
     st.session_state["agent_outputs"] = {
         "entity": entity,
-        "revenue": rev_out,
-        "liquidity": liq_out,
-        "balance_sheet": bs_out,
         "workflow_state": result_state,
     }
 
@@ -1085,6 +1071,43 @@ _GRADE_COLORS = {"AA": "#00FF88", "A": "#00FF88", "BBB": "#00BFFF", "BB": "#FFB0
 _STATUS_COLORS = {"strong": "#00FF88", "ok": "#FFB000", "weak": "#FF3333", "missing": "#555"}
 
 
+def _render_ledger_category(fact_ledger_data: Any, category: str, title: str) -> None:
+    """Render one fact-ledger category as metric rows with meanings (currency-aware)."""
+    if not fact_ledger_data:
+        return
+    entries = [e for e in fact_ledger_data.get("entries", []) if e.get("category") == category]
+    if not entries:
+        return
+    out = f'<div class="bb-agent-card" style="margin-top:12px;"><div class="bb-agent-card-title">{html.escape(title)}</div>'
+    for entry in entries:
+        val = entry.get("value")
+        name = entry.get("display_name", "")
+        unit = entry.get("unit", "")
+        risk = entry.get("risk_signal")
+        color = "#E6E6E6"
+        if risk == "PASS": color = "#00FF88"
+        elif risk == "WARN": color = "#FFB000"
+        elif risk == "FAIL": color = "#FF3333"
+        if val is not None:
+            if unit == "%":
+                disp = f"{val:.2f}%"
+            elif unit == "x":
+                disp = f"{val:.2f}x"
+            elif unit and unit.isupper() and len(unit) <= 4:
+                disp = format_money(val, unit)   # currency-denominated (e.g. working capital)
+            else:
+                disp = f"{val:,.2f} {unit}".strip()
+        else:
+            disp, color = "N/A", "#666"
+        out += (f'<div class="bb-metric-row"><span class="bb-mkey">{html.escape(name)}</span>'
+                f'<span class="bb-mval" style="color:{color};">{html.escape(disp)}</span></div>')
+        m = meaning_for(entry.get("metric"))
+        if m:
+            out += f'<div style="font-size:10px;color:#7A7D96;margin:-6px 0 8px 0;">{html.escape(m)}</div>'
+    out += '</div>'
+    st.markdown(out, unsafe_allow_html=True)
+
+
 def _render_verdict_banner_v3(workflow_state: dict[str, Any]) -> None:
     """A one-line plain-language verdict at the very top of the results."""
     record_data = workflow_state.get("company_record")
@@ -1519,9 +1542,6 @@ def page_analysis() -> None:
                     for entry in saas_entries:
                         st.markdown(f"- **{entry.get('display_name')}**: {entry.get('formula')}")
 
-        # V1 Revenue Calculator output (backward compat)
-        render_agent_card("Revenue Calculator", outputs.get("revenue", {}), css_variant="", icon="◆")
-        
         # ── V2 Profitability Metrics ───────────────────────────
         if fact_ledger_data:
             profit_entries = [e for e in fact_ledger_data.get("entries", []) if e.get("category") == "profitability"]
@@ -1646,6 +1666,9 @@ def page_analysis() -> None:
                             unsafe_allow_html=True,
                         )
                         
+        # ── V2 Liquidity Metrics (fact ledger) ────────────
+        _render_ledger_category(fact_ledger_data, "liquidity", "Liquidity")
+
         # ── V2 Solvency Metrics ───────────────────────────
         if fact_ledger_data:
             solv_entries = [e for e in fact_ledger_data.get("entries", []) if e.get("category") == "solvency"]
@@ -1682,9 +1705,6 @@ def page_analysis() -> None:
                     for entry in solv_entries:
                         st.markdown(f"- **{entry.get('display_name')}**: {entry.get('formula')}")
 
-        # ── V1 Backward-compat cards ──────────────────────────────────────
-        render_agent_card("Liquidity Calculator", outputs.get("liquidity", {}), css_variant="liq", icon="◈")
-        render_agent_card("Balance Sheet Calculator", outputs.get("balance_sheet", {}), css_variant="bs", icon="◇")
 
     # ── V3: Debt Serviceability Analysis (interactive DSCR schedule + stress) ──
     _render_debt_serviceability_v3(workflow_state)
@@ -1748,15 +1768,9 @@ def page_analysis() -> None:
     show_dev = st.checkbox("🔧 Show developer / audit data (raw JSON)", value=False,
                            help="The full computed data behind every number — for auditing, not everyday use.")
     if show_dev:
-        render_section_header("Raw Agent Outputs", subtitle="Full JSON — audit trail")
-        for label, key in [
-            ("Revenue Calculator", "revenue"),
-            ("Liquidity Calculator", "liquidity"),
-            ("Balance Sheet Calculator", "balance_sheet"),
-            ("V2 Workflow State", "workflow_state"),
-        ]:
-            with st.expander(f"{label}"):
-                st.json(outputs.get(key, {}))
+        render_section_header("Raw Workflow Output", subtitle="Full JSON — audit trail")
+        with st.expander("Workflow State (fact ledger, DSCR, peers, report)"):
+            st.json(outputs.get("workflow_state", {}))
 
 
 # ── Page 4 ────────────────────────────────────────────────────────────────────

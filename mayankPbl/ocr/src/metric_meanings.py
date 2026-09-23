@@ -29,6 +29,7 @@ MEANINGS: dict[str, str] = {
     "current_ratio": "Whether short-term assets can cover short-term bills — above 1 is the baseline.",
     "quick_ratio": "Short-term coverage excluding inventory — a stricter liquidity test.",
     "working_capital": "Short-term assets minus short-term liabilities — day-to-day financial breathing room.",
+    "cash_ratio": "Whether cash alone covers short-term bills — the strictest liquidity test.",
     # Debt service
     "dscr": "Whether cash covers loan payments — above 1 means it can pay, higher is safer.",
     # SaaS
