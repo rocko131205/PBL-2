@@ -11,6 +11,7 @@ from typing import Any, Optional
 import re
 
 import streamlit as st
+import pandas as pd
 
 from src.formatting import format_money
 
@@ -530,10 +531,45 @@ def _latest_raw(ts: dict[str, Any], field: str) -> tuple[Optional[float], str]:
     return None, "—"
 
 
+def _series_rows(ts: dict[str, Any], field: str) -> list[tuple[str, float]]:
+    """All (period, value) pairs for a field, chronologically sorted."""
+    rows = []
+    for item in ts.get(field) or []:
+        if isinstance(item, dict) and item.get("value") is not None:
+            rows.append((str(item.get("period", "—")), float(item["value"])))
+    rows.sort(key=lambda x: x[0])
+    return rows
+
+
+def _render_metric_history_popover(label: str, rows: list[tuple[str, float]], currency: Optional[str]) -> None:
+    """A click-to-open popover showing the full period-by-period history + trend."""
+    with st.popover(f"📊 All {len(rows)} periods", use_container_width=True):
+        st.markdown(f"**{label.title()} — full history**")
+        table = pd.DataFrame({
+            "Period": [_fmt_period(p) for p, _ in rows],
+            "Value": [format_money(v, currency) for _, v in rows],
+        })
+        st.dataframe(table, hide_index=True, use_container_width=True)
+        if len(rows) >= 2:
+            chart = pd.DataFrame({label.title(): {p: v for p, v in rows}})
+            st.line_chart(chart, height=180)
+            first_v, last_v = rows[0][1], rows[-1][1]
+            if abs(first_v) > 1e-9:
+                chg = (last_v - first_v) / abs(first_v) * 100.0
+                st.caption(f"{_fmt_period(rows[0][0])} → {_fmt_period(rows[-1][0])}: "
+                           f"{format_money(first_v, currency)} → {format_money(last_v, currency)} ({chg:+.1f}%).")
+
+
 def render_metric_cards(payload: dict[str, Any]) -> None:
-    """Render four key metric cards from the OCR payload, currency-aware."""
+    """Render four key metric cards from the OCR payload, currency-aware.
+
+    Each card shows the LATEST reported figure (not an average); a popover reveals
+    the full period-by-period history and trend.
+    """
     ts = payload.get("time_series") or {}
     currency = (payload.get("entity") or {}).get("currency")
+
+    st.caption("Each card shows the latest reported figure — click **All periods** for the full history.")
 
     cards = [
         ("revenue",           "REVENUE",           ""),
@@ -546,14 +582,18 @@ def render_metric_cards(payload: dict[str, Any]) -> None:
     for col, (field, label, cls) in zip(cols, cards):
         raw, period = _latest_raw(ts, field)
         value = format_money(raw, currency)
-        col.markdown(
-            f'<div class="bb-metric-card {cls}">'
-            f'<div class="bb-metric-label">{label}</div>'
-            f'<div class="bb-metric-value">{html.escape(value)}</div>'
-            f'<div class="bb-metric-period">{html.escape(_fmt_period(period))}</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+        with col:
+            st.markdown(
+                f'<div class="bb-metric-card {cls}">'
+                f'<div class="bb-metric-label">{label}</div>'
+                f'<div class="bb-metric-value">{html.escape(value)}</div>'
+                f'<div class="bb-metric-period">{html.escape(_fmt_period(period))} · latest</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            rows = _series_rows(ts, field)
+            if rows:
+                _render_metric_history_popover(label, rows, currency)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
