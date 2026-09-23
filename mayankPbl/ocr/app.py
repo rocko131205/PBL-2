@@ -28,6 +28,7 @@ from src.credit_scorecard import compute_scorecard
 from src.credit_memo import build_memo, render_memo_html
 from src.forecast import forecast_field
 from src.ai_assistant import explain_results, answer_question
+from src.anomaly_engine import detect_anomalies
 from src.formatting import format_money, format_ratio, format_percent
 from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
 from src.yfinance_ingestion import fetch_by_ticker
@@ -1213,6 +1214,43 @@ def _render_credit_scorecard_v3(workflow_state: dict[str, Any]) -> None:
         )
 
 
+def _render_anomalies_v3(workflow_state: dict[str, Any]) -> None:
+    """Deterministic data & risk alerts (large swings, sign flips, identity breaks)."""
+    rec = workflow_state.get("company_record")
+    if not rec:
+        return
+    try:
+        record = NormalizedCompanyRecord(**rec)
+    except Exception:
+        return
+
+    report = detect_anomalies(record)
+    if not report.anomalies:
+        st.markdown(
+            '<div style="font-size:12px;color:#00FF88;padding:8px 12px;background:#001A0D;'
+            'border-left:3px solid #00FF88;border-radius:3px;">✓ No anomalies detected — the figures are internally consistent.</div>',
+            unsafe_allow_html=True,
+        )
+        render_hr()
+        return
+
+    render_section_header("Data & Risk Alerts",
+                          subtitle=f"{report.critical_count} critical · {report.warning_count} warning · auto-detected")
+    sev_colors = {"critical": "#FF3333", "warning": "#FFB000", "info": "#00BFFF"}
+    sev_icons = {"critical": "⛔", "warning": "⚠️", "info": "ℹ️"}
+    for a in report.anomalies:
+        c = sev_colors.get(a.severity, "#888")
+        st.markdown(
+            f'<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #1E2030;">'
+            f'<span style="font-size:13px;">{sev_icons.get(a.severity, "•")}</span>'
+            f'<span style="font-size:12px;color:#D8D8E0;line-height:1.5;">{html.escape(a.detail)} '
+            f'<span style="color:{c};font-size:10px;font-weight:700;text-transform:uppercase;">[{html.escape(a.severity)}]</span></span></div>',
+            unsafe_allow_html=True,
+        )
+    st.caption("These are flags for review, not verdicts. Ask the AI Assistant below to explain any of them.")
+    render_hr()
+
+
 def _render_trends_forecast_v3(workflow_state: dict[str, Any]) -> None:
     """V3 trend charts (revenue, margin history) + forward revenue forecast with scenarios."""
     record_data = workflow_state.get("company_record")
@@ -1415,6 +1453,9 @@ def page_analysis() -> None:
     # ── V3: Credit Scorecard headline (grade + PD) ────────────────────────
     _render_credit_scorecard_v3(workflow_state)
     render_hr()
+
+    # ── V3: Data & Risk Alerts ────────────────────────────────────────────
+    _render_anomalies_v3(workflow_state)
 
     # ── V3: Trends & Forecast ─────────────────────────────────────────────
     _render_trends_forecast_v3(workflow_state)
