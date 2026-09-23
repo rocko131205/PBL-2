@@ -1461,35 +1461,9 @@ def page_analysis() -> None:
     # ── V3: Trends & Forecast ─────────────────────────────────────────────
     _render_trends_forecast_v3(workflow_state)
 
-    # ── V2 DSCR Input Form (if no DSCR inputs provided yet) ───────────────
-    dscr_inputs = st.session_state.get("dscr_user_inputs")
+    # DSCR is now computed inline in the V3 "Debt Serviceability Analysis" section
+    # below (no more go-back-and-re-run round-trip).
     dscr_result_data = workflow_state.get("dscr_result")
-    
-    if dscr_result_data and dscr_result_data.get("dscr_ratio") is None and not dscr_inputs:
-        st.info("💡 **DSCR requires debt service information.** Provide loan details below to compute DSCR.")
-        with st.form("dscr_form"):
-            st.markdown("#### Debt Service Inputs")
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.markdown("**Existing Debt**")
-                e_prin = st.number_input("Annual Principal Repayment", min_value=0.0, value=0.0, key="dscr_e_prin")
-                e_int = st.number_input("Annual Interest Payment", min_value=0.0, value=0.0, key="dscr_e_int")
-            with col_b:
-                st.markdown("**Proposed New Debt**")
-                p_amount = st.number_input("Loan Amount", min_value=0.0, value=0.0, key="dscr_p_amount")
-                p_rate = st.number_input("Interest Rate (%)", min_value=0.0, value=0.0, key="dscr_p_rate")
-                p_tenure = st.number_input("Tenure (Years)", min_value=0.0, value=0.0, key="dscr_p_tenure")
-
-            if st.form_submit_button("Submit Debt Data and Recalculate"):
-                st.session_state["dscr_user_inputs"] = {
-                    "existing_loan_principal_repayment": e_prin,
-                    "existing_loan_interest": e_int,
-                    "proposed_loan_amount": p_amount,
-                    "proposed_interest_rate": p_rate,
-                    "proposed_tenure_years": p_tenure,
-                }
-                st.success("Debt metrics saved! Go back to Upload page and click **RUN FULL ANALYSIS** again.")
-                st.stop()
 
     # ── Layout: Two columns ───────────────────────────────────────────────
     c1, c2 = st.columns(2)
@@ -1627,65 +1601,8 @@ def page_analysis() -> None:
             st.markdown(peers_html, unsafe_allow_html=True)
 
     with c2:
-        render_section_header("Credit Risk Assessment", subtitle="V2 DSCR & Risk Dashboard")
-
-        # ── DSCR Display ──────────────────────────────────────────────────
-        if dscr_result_data:
-            dscr_ratio = dscr_result_data.get("dscr_ratio")
-            risk_level = dscr_result_data.get("risk_level", "INSUFFICIENT_DATA")
-            methodology = dscr_result_data.get("methodology", {})
-            interpretation = dscr_result_data.get("interpretation", "")
-
-            risk_colors = {"LOW": "#00FF88", "MODERATE": "#FFB000", "HIGH": "#FF6B35", "CRITICAL": "#FF3333", "INSUFFICIENT_DATA": "#888"}
-            dscr_color = risk_colors.get(risk_level, "#888")
-
-            if dscr_ratio is not None:
-                dscr_html = f'''
-                <div class="bb-agent-card" style="border-left: 4px solid {dscr_color};">
-                    <div class="bb-agent-card-title" style="color:{dscr_color};">DSCR — Debt Service Coverage Ratio</div>
-                    <div class="bb-metric-row">
-                        <span class="bb-mkey" style="font-size:14px;color:{dscr_color};">DSCR Ratio</span>
-                        <span class="bb-mval" style="font-size:22px;color:{dscr_color};font-weight:bold;">{dscr_ratio:.2f}x</span>
-                    </div>
-                    <div class="bb-metric-row">
-                        <span class="bb-mkey">Risk Level</span>
-                        <span class="bb-mval" style="color:{dscr_color};font-weight:bold;">{risk_level}</span>
-                    </div>
-                    <div class="bb-metric-row">
-                        <span class="bb-mkey">Numerator ({html.escape(methodology.get("numerator_name", "N/A"))})</span>
-                        <span class="bb-mval">{dscr_result_data.get("numerator_value", 0):,.0f}</span>
-                    </div>
-                    <div class="bb-metric-row">
-                        <span class="bb-mkey">Total Debt Service</span>
-                        <span class="bb-mval">{dscr_result_data.get("denominator_value", 0):,.0f}</span>
-                    </div>
-                </div>'''
-                st.markdown(dscr_html, unsafe_allow_html=True)
-            else:
-                st.markdown(f'''
-                <div class="bb-agent-card" style="border-left: 4px solid #888;">
-                    <div class="bb-agent-card-title" style="color:#888;">DSCR — Insufficient Data</div>
-                    <div style="font-size:12px;color:#9A9AB0;line-height:1.6;">{html.escape(interpretation)}</div>
-                </div>''', unsafe_allow_html=True)
-
-            # DSCR Methodology transparency
-            if methodology:
-                with st.expander("DSCR Methodology Details"):
-                    st.markdown(f"**Numerator**: {methodology.get('numerator_name', 'N/A')} — {methodology.get('numerator_formula', '')}")
-                    st.markdown(f"**Source**: {methodology.get('numerator_source', 'N/A')}")
-                    st.markdown(f"**Time Period**: {methodology.get('time_period', 'N/A')}")
-                    if methodology.get("denominator_components"):
-                        st.markdown("**Debt Service Components**:")
-                        for comp in methodology["denominator_components"]:
-                            st.markdown(f"- {comp}")
-                    if methodology.get("assumptions"):
-                        st.markdown("**Assumptions**:")
-                        for a in methodology["assumptions"]:
-                            st.markdown(f"- {a}")
-                    if methodology.get("limitations"):
-                        st.markdown("**Limitations**:")
-                        for l in methodology["limitations"]:
-                            st.markdown(f"- ⚠️ {l}")
+        render_section_header("Risk Dashboard", subtitle="Deterministic risk indicators")
+        st.caption("Full DSCR (schedule + stress testing) is in the Debt Serviceability section below.")
 
         # ── Risk Dashboard ────────────────────────────────────────────────
         risk_data = workflow_state.get("risk_dashboard")
