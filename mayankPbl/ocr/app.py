@@ -27,6 +27,7 @@ from src.debt_service import LoanTerms, compute_dscr_schedule
 from src.credit_scorecard import compute_scorecard
 from src.credit_memo import build_memo, render_memo_html
 from src.forecast import forecast_field
+from src.ai_assistant import explain_results, answer_question
 from src.formatting import format_money, format_ratio, format_percent
 from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
 from src.yfinance_ingestion import fetch_by_ticker
@@ -1276,6 +1277,65 @@ def _render_trends_forecast_v3(workflow_state: dict[str, Any]) -> None:
     render_hr()
 
 
+def _scorecard_extra_lines(workflow_state: dict[str, Any]) -> list[str]:
+    """Grade line to enrich the AI fact context (computed, not invented)."""
+    rec = workflow_state.get("company_record")
+    if not rec:
+        return []
+    try:
+        record = NormalizedCompanyRecord(**rec)
+    except Exception:
+        return []
+    profile = workflow_state.get("company_profile", {})
+    sc = compute_scorecard(record, industry=record.industry or profile.get("industry"),
+                           min_dscr=st.session_state.get("v3_min_dscr"))
+    if sc.composite_score is None:
+        return []
+    return [f"Credit grade: {sc.grade} ({sc.grade_label}, composite {sc.composite_score:.0f}/100, PD {sc.pd_band})"]
+
+
+def _render_ai_assistant_v3(workflow_state: dict[str, Any]) -> None:
+    """Guardrailed AI: explains the computed facts and answers scoped questions."""
+    if not workflow_state.get("company_record"):
+        return
+    render_hr()
+    render_section_header("AI Assistant", subtitle="V3 · explains the computed facts — never invents numbers")
+
+    extra = _scorecard_extra_lines(workflow_state)
+
+    if st.button("🧠 Explain these results in plain English", use_container_width=False):
+        with st.spinner("Reading the computed facts…"):
+            st.session_state["ai_explain"] = explain_results(workflow_state, extra)
+
+    if st.session_state.get("ai_explain"):
+        st.markdown(
+            f'<div style="font-size:13px;color:#D8D8E0;line-height:1.7;padding:14px;background:#0B0C10;'
+            f'border:1px solid #1E2030;border-left:3px solid #00BFFF;border-radius:4px;">'
+            f'{html.escape(st.session_state["ai_explain"])}</div>',
+            unsafe_allow_html=True,
+        )
+
+    with st.form("ai_qa_form", clear_on_submit=True):
+        q = st.text_input("Ask about this company",
+                          placeholder="e.g. Is leverage a concern? What's driving the risk level? How strong is cash flow?",
+                          label_visibility="collapsed")
+        asked = st.form_submit_button("Ask")
+    if asked and q.strip():
+        with st.spinner("Thinking…"):
+            ans = answer_question(q, workflow_state, extra)
+        st.session_state.setdefault("ai_qa_history", []).append((q.strip(), ans))
+
+    history = st.session_state.get("ai_qa_history", [])
+    for qq, aa in reversed(history[-5:]):
+        st.markdown(f'<div style="font-size:12px;color:#00BFFF;margin-top:10px;"><b>Q:</b> {html.escape(qq)}</div>',
+                    unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:13px;color:#D8D8E0;line-height:1.6;padding:8px 12px;background:#0B0C10;border-radius:4px;"><b>A:</b> {html.escape(aa)}</div>',
+                    unsafe_allow_html=True)
+
+    st.caption("Answers use only the computed facts on this page. The AI cannot change any number, "
+               "and will say so if something isn't in the data. Requires your local LLM endpoint to be running.")
+
+
 def _render_credit_memo_v3(workflow_state: dict[str, Any]) -> None:
     """V3 one-page Credit Memo with printable/exportable HTML download."""
     record_data = workflow_state.get("company_record")
@@ -1703,6 +1763,8 @@ def page_analysis() -> None:
             st.markdown(f'<div style="font-size:12px;color:#CC88FF;margin:4px 0;padding:6px 10px;background:#0D0020;border-left:3px solid #CC88FF;border-radius:2px;">{html.escape(str(f))}</div>', unsafe_allow_html=True)
 
     # ── V3: Credit Memo (printable / exportable) ──────────────────────────
+    _render_ai_assistant_v3(workflow_state)
+
     _render_credit_memo_v3(workflow_state)
 
     # ── Workflow Log ──────────────────────────────────────────────────────
