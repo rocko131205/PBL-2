@@ -661,9 +661,15 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
     render_metric_cards(payload)
     
     qualitative_text = (payload.get("entity") or {}).get("qualitative_context", "")
-    st.markdown("### Qualitative Context (Board Notes, Strategy, Earnings Call)")
-    st.info("The Credit Risk Agent will use this text to contextualize the hard financial metrics.")
-    user_qualitative = st.text_area("Edit or Paste Qualitative Context", value=qualitative_text, height=150)
+    st.markdown("### Qualitative Context (optional)")
+    st.caption(
+        "Paste management commentary, board notes, or earnings-call highlights here. "
+        "The analysis will extract credit-relevant points from it (expansion plans, risks, "
+        "material events) — this is soft context and never changes the computed numbers. Leave blank to skip."
+    )
+    user_qualitative = st.text_area("Paste qualitative context", value=qualitative_text,
+                                    height=140, label_visibility="collapsed",
+                                    placeholder="e.g. 'Management guided to 20% revenue growth next year and flagged supply-chain risk in Q3…'")
     if user_qualitative != qualitative_text:
         if "entity" not in payload or payload["entity"] is None:
             payload["entity"] = {}

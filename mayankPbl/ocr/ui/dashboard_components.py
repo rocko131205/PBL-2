@@ -7,10 +7,12 @@ from __future__ import annotations
 import html
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 import re
 
 import streamlit as st
+
+from src.formatting import format_money
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -472,44 +474,66 @@ def render_section_header(title: str, subtitle: str = "") -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fmt_value(v: float | None) -> str:
-    """Format a numeric value for display."""
+    """Format a numeric value for display (no currency): scales to K/M/B/T."""
     if v is None:
         return "N/A"
     av = abs(v)
-    if av >= 1_000_000:
-        return f"{v / 1_000_000:,.2f}M"
-    if av >= 1_000:
-        return f"{v / 1_000:,.1f}K"
+    sign = "-" if v < 0 else ""
+    if av >= 1e12:
+        return f"{sign}{av / 1e12:,.2f}T"
+    if av >= 1e9:
+        return f"{sign}{av / 1e9:,.2f}B"
+    if av >= 1e6:
+        return f"{sign}{av / 1e6:,.2f}M"
+    if av >= 1e3:
+        return f"{sign}{av / 1e3:,.1f}K"
     return f"{v:,.2f}"
 
 
-def _latest(ts: dict[str, Any], field: str) -> tuple[str, str]:
-    """Return (formatted_value, period) for the most recent non-null entry (ignoring future estimates)."""
+def _fmt_period(period: str) -> str:
+    """'2025-FY' -> 'FY 2025', '2024-Q3' -> 'Q3 2024'. Leaves anything else as-is."""
+    if not period or period == "—":
+        return "—"
+    p = str(period)
+    try:
+        year = p[:4]
+        int(year)
+    except (ValueError, IndexError):
+        return p
+    tail = p[5:] if len(p) > 5 else ""
+    if tail.upper() == "FY":
+        return f"FY {year}"
+    if tail and tail[0].upper() == "Q":
+        return f"{tail.upper()} {year}"
+    return p
+
+
+def _latest_raw(ts: dict[str, Any], field: str) -> tuple[Optional[float], str]:
+    """Return (raw_value, period) for the most recent non-null entry (ignoring future estimates)."""
     series = ts.get(field) or []
     current_year = datetime.now(timezone.utc).year
-    
-    # First pass: try to find a valid historical figure (year <= current_year)
+
     for item in reversed(series):
         if isinstance(item, dict) and item.get("value") is not None:
             period = str(item.get("period", "—"))
             try:
                 if int(period[:4]) > current_year:
-                    continue  # Skip future projections like 2027 Estimates
+                    continue  # Skip future projections
             except ValueError:
                 pass
-            return _fmt_value(float(item["value"])), period
-            
-    # Fallback to absolute last if nothing else was found
+            return float(item["value"]), period
+
     for item in reversed(series):
         if isinstance(item, dict) and item.get("value") is not None:
-            return _fmt_value(float(item["value"])), str(item.get("period", "—"))
-            
-    return "N/A", "—"
+            return float(item["value"]), str(item.get("period", "—"))
+
+    return None, "—"
 
 
 def render_metric_cards(payload: dict[str, Any]) -> None:
-    """Render four key metric cards from the OCR payload."""
+    """Render four key metric cards from the OCR payload, currency-aware."""
     ts = payload.get("time_series") or {}
+    currency = (payload.get("entity") or {}).get("currency")
 
     cards = [
         ("revenue",           "REVENUE",           ""),
@@ -518,15 +542,15 @@ def render_metric_cards(payload: dict[str, Any]) -> None:
         ("equity",            "EQUITY",             "green"),
     ]
 
-    # Use native columns to avoid Markdown code-block detection on indented HTML
     cols = st.columns(4)
     for col, (field, label, cls) in zip(cols, cards):
-        value, period = _latest(ts, field)
+        raw, period = _latest_raw(ts, field)
+        value = format_money(raw, currency)
         col.markdown(
             f'<div class="bb-metric-card {cls}">'
             f'<div class="bb-metric-label">{label}</div>'
             f'<div class="bb-metric-value">{html.escape(value)}</div>'
-            f'<div class="bb-metric-period">{html.escape(period)}</div>'
+            f'<div class="bb-metric-period">{html.escape(_fmt_period(period))}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
