@@ -132,16 +132,18 @@ gracefully to the deterministic data with a clear "narrative unavailable" note.
 
 ## 6. Build order (what gets done, next first)
 
-- [x] Currency/period/units readable everywhere (started — Upload cards done)
-- [ ] Unify results into one report with a **Verdict banner** at the top
+- [x] Currency/period/units readable everywhere (Upload cards + analysis)
+- [x] Metric history popovers (click a card → all periods + trend)
+- [x] **Verdict banner** at the top of results
+- [x] De-SaaS the engine (SaaS metrics only for software companies)
+- [x] AI: guardrailed **"Explain this"** + scoped **"Ask about this company"** chat
+- [x] **Anomaly/alerts engine** (swings, sign flips, identity breaks, impossible values)
 - [ ] Inline DSCR (kill the re-run round-trip)
-- [ ] "What this means" on every metric + consistent status colors
-- [ ] De-SaaS the engine (industry-correct metrics for all companies)
-- [ ] AI: harden narrative (structured output) + "Explain this" buttons
-- [ ] AI: scoped "Ask about this company" chat
+- [ ] "What this means" one-liner on every metric + consistent status colors
+- [ ] AI: harden the workflow narrative (structured output so it never comes back blank)
 - [ ] Peer view: currency-normalized + percentiles + radar
 - [ ] Persist analyses (history / compare over time)
-- [ ] Working-capital + anomaly/alerts engines
+- [ ] Working-capital cycle engine (needs receivables/inventory/payables ingestion)
 - [ ] Retire duplicate V1 calculators; final polish pass
 
 *Last updated: 2026-09-24. Built on branch `V3-revamp`.*
