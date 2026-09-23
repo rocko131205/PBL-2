@@ -26,6 +26,7 @@ from src.schema import DSCRInputs, NormalizedCompanyRecord
 from src.debt_service import LoanTerms, compute_dscr_schedule
 from src.credit_scorecard import compute_scorecard
 from src.credit_memo import build_memo, render_memo_html
+from src.forecast import forecast_field
 from src.formatting import format_money, format_ratio, format_percent
 from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
 from src.yfinance_ingestion import fetch_by_ticker
@@ -1160,6 +1161,70 @@ def _render_credit_scorecard_v3(workflow_state: dict[str, Any]) -> None:
         )
 
 
+def _render_trends_forecast_v3(workflow_state: dict[str, Any]) -> None:
+    """V3 trend charts (revenue, margin history) + forward revenue forecast with scenarios."""
+    record_data = workflow_state.get("company_record")
+    if not record_data:
+        return
+    try:
+        record = NormalizedCompanyRecord(**record_data)
+    except Exception:
+        return
+
+    rev_series = sorted(record.revenue, key=lambda x: x.period)
+    if len(rev_series) < 2:
+        return  # nothing meaningful to trend
+
+    render_section_header("Trends & Forecast", subtitle="V3 · history + forward projection with scenarios")
+    ccy = record.currency
+
+    c_left, c_right = st.columns(2)
+
+    # ── Revenue history + forecast ────────────────────────────────────────
+    with c_left:
+        st.markdown("**Revenue — history & 3-year forecast**")
+        fc = forecast_field(record, "revenue", years=3)
+        data = {}
+        hist_periods = [p for p, _ in [(x.period, x.value) for x in rev_series]]
+        for x in rev_series:
+            data.setdefault(x.period, {})["History"] = x.value
+        if fc:
+            # connect forecast lines to the last actual point
+            last_p, last_v = fc.historical[-1]
+            for label in ("Base", "Optimistic", "Pessimistic"):
+                data.setdefault(last_p, {})[label] = last_v
+            for pt in fc.points:
+                data[pt.period] = {"Base": pt.base, "Optimistic": pt.optimistic, "Pessimistic": pt.pessimistic}
+        df = pd.DataFrame(data).T.sort_index()
+        st.line_chart(df, height=240)
+        if fc and fc.cagr_pct is not None:
+            st.caption(
+                f"Historical CAGR **{fc.cagr_pct:.1f}%/yr**. Base grows at that rate; "
+                f"optimistic **{fc.optimistic_growth_pct:.1f}%**, pessimistic **{fc.pessimistic_growth_pct:.1f}%**. "
+                f"Latest actual: {format_money(fc.historical[-1][1], ccy)}."
+            )
+
+    # ── Margin trend ──────────────────────────────────────────────────────
+    with c_right:
+        st.markdown("**Operating margin trend**")
+        op = {p.period: p.value for p in record.operating_income}
+        rev = {p.period: p.value for p in record.revenue}
+        margins = {}
+        for period in sorted(rev):
+            if period in op and abs(rev[period]) > 1e-9:
+                margins[period] = round(op[period] / rev[period] * 100.0, 2)
+        if len(margins) >= 2:
+            st.line_chart(pd.DataFrame({"Operating margin %": margins}), height=240)
+            latest = margins[sorted(margins)[-1]]
+            first = margins[sorted(margins)[0]]
+            trend = "improving" if latest > first else "declining" if latest < first else "flat"
+            st.caption(f"Margin is **{trend}** — {first:.1f}% → {latest:.1f}% across the period.")
+        else:
+            st.caption("Not enough aligned revenue + operating income periods to chart margin.")
+
+    render_hr()
+
+
 def _render_credit_memo_v3(workflow_state: dict[str, Any]) -> None:
     """V3 one-page Credit Memo with printable/exportable HTML download."""
     record_data = workflow_state.get("company_record")
@@ -1236,6 +1301,9 @@ def page_analysis() -> None:
     # ── V3: Credit Scorecard headline (grade + PD) ────────────────────────
     _render_credit_scorecard_v3(workflow_state)
     render_hr()
+
+    # ── V3: Trends & Forecast ─────────────────────────────────────────────
+    _render_trends_forecast_v3(workflow_state)
 
     # ── V2 DSCR Input Form (if no DSCR inputs provided yet) ───────────────
     dscr_inputs = st.session_state.get("dscr_user_inputs")
