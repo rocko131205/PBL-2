@@ -61,6 +61,16 @@ _BALANCE_MAP: dict[str, str] = {
 }
 
 
+_CASHFLOW_MAP: dict[str, str] = {
+    "Operating Cash Flow":                            "operating_cash_flow",
+    "Cash Flow From Continuing Operating Activities":  "operating_cash_flow",
+    "Total Cash From Operating Activities":            "operating_cash_flow",
+    "Capital Expenditure":                             "capital_expenditure",
+    "Capital Expenditures":                            "capital_expenditure",
+    "Free Cash Flow":                                  "free_cash_flow",
+}
+
+
 def _to_period(ts: Any) -> str:
     """Convert a pandas Timestamp to 'YYYY-FY'."""
     return f"{pd.Timestamp(ts).year}-FY"
@@ -115,6 +125,10 @@ def fetch_by_ticker(ticker: str) -> dict[str, Any]:
 
     financials = t.financials    # income statement — rows=labels, cols=timestamps
     balance    = t.balance_sheet
+    try:
+        cashflow = t.cashflow    # cash flow statement
+    except Exception:
+        cashflow = None
 
     if (financials is None or financials.empty) and (balance is None or balance.empty):
         raise ValueError(
@@ -129,6 +143,11 @@ def fetch_by_ticker(ticker: str) -> dict[str, Any]:
 
     if balance is not None and not balance.empty:
         for k, v in _df_to_series(balance, _BALANCE_MAP).items():
+            if k not in time_series:
+                time_series[k] = v
+
+    if cashflow is not None and not cashflow.empty:
+        for k, v in _df_to_series(cashflow, _CASHFLOW_MAP).items():
             if k not in time_series:
                 time_series[k] = v
 

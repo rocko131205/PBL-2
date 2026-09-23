@@ -14,7 +14,7 @@ raw numbers — it only receives pre-computed fact ledger entries.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, ClassVar, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
 
@@ -178,6 +178,11 @@ class NormalizedCompanyRecord(BaseModel):
     non_current_liabilities: List[FinancialPeriod] = Field(default_factory=list)
     retained_earnings: List[FinancialPeriod] = Field(default_factory=list)
 
+    # Cash flow statement (V3: critical for real debt-service analysis)
+    operating_cash_flow: List[FinancialPeriod] = Field(default_factory=list)
+    capital_expenditure: List[FinancialPeriod] = Field(default_factory=list)
+    free_cash_flow: List[FinancialPeriod] = Field(default_factory=list)
+
     # Per-share
     basic_eps: List[FinancialPeriod] = Field(default_factory=list)
     diluted_eps: List[FinancialPeriod] = Field(default_factory=list)
@@ -192,6 +197,11 @@ class NormalizedCompanyRecord(BaseModel):
         description="Map of field_name → source (e.g. 'revenue': 'yfinance', 'total_assets': 'fmp')"
     )
 
+    # V3: Currency normalization
+    original_currency: Optional[str] = Field(None, description="Native currency before FX conversion, if converted")
+    fx_rate_used: Optional[float] = Field(None, description="FX rate applied (1 original_currency = fx_rate base_currency)")
+    is_currency_normalized: bool = Field(False, description="True once monetary values are converted to a base currency")
+
     def latest_value(self, field_name: str) -> Optional[float]:
         """Get the most recent value for a given financial field."""
         series: List[FinancialPeriod] = getattr(self, field_name, [])
@@ -205,18 +215,52 @@ class NormalizedCompanyRecord(BaseModel):
         series: List[FinancialPeriod] = getattr(self, field_name, [])
         return bool(series)
 
+    # All time-series financial fields (single source of truth).
+    FINANCIAL_FIELDS: ClassVar[List[str]] = [
+        "revenue", "cost_of_revenue", "gross_profit", "operating_income",
+        "net_operating_income", "ebitda", "net_income", "interest_expense",
+        "depreciation", "pretax_income", "income_tax",
+        "operating_cash_flow", "capital_expenditure", "free_cash_flow",
+        "total_assets", "total_liabilities", "current_assets", "current_liabilities",
+        "equity", "total_debt", "long_term_debt", "short_term_debt",
+        "cash_and_equivalents", "non_current_assets", "non_current_liabilities",
+        "retained_earnings", "basic_eps", "diluted_eps",
+    ]
+
+    # Fields expressed in currency (converted during FX normalization).
+    # Per-share (EPS) values are NOT scaled — they are already per-share amounts,
+    # but they ARE currency-denominated, so they are converted too.
+    MONETARY_FIELDS: ClassVar[List[str]] = [
+        "revenue", "cost_of_revenue", "gross_profit", "operating_income",
+        "net_operating_income", "ebitda", "net_income", "interest_expense",
+        "depreciation", "pretax_income", "income_tax",
+        "operating_cash_flow", "capital_expenditure", "free_cash_flow",
+        "total_assets", "total_liabilities", "current_assets", "current_liabilities",
+        "equity", "total_debt", "long_term_debt", "short_term_debt",
+        "cash_and_equivalents", "non_current_assets", "non_current_liabilities",
+        "retained_earnings", "basic_eps", "diluted_eps",
+    ]
+
     def available_fields(self) -> List[str]:
         """Return list of financial fields that have data."""
-        financial_fields = [
-            "revenue", "cost_of_revenue", "gross_profit", "operating_income",
-            "net_operating_income", "ebitda", "net_income", "interest_expense",
-            "depreciation", "pretax_income", "income_tax",
-            "total_assets", "total_liabilities", "current_assets", "current_liabilities",
-            "equity", "total_debt", "long_term_debt", "short_term_debt",
-            "cash_and_equivalents", "non_current_assets", "non_current_liabilities",
-            "retained_earnings", "basic_eps", "diluted_eps",
-        ]
-        return [f for f in financial_fields if self.has_field(f)]
+        return [f for f in self.FINANCIAL_FIELDS if self.has_field(f)]
+
+    def completeness(self) -> Dict[str, Any]:
+        """Report which financial fields are present vs missing.
+
+        Returns a dict with present fields, missing fields, and a 0-100 score,
+        so the UI can show the user exactly what data was captured before analysis.
+        """
+        present = self.available_fields()
+        missing = [f for f in self.FINANCIAL_FIELDS if f not in present]
+        total = len(self.FINANCIAL_FIELDS)
+        return {
+            "present": present,
+            "missing": missing,
+            "present_count": len(present),
+            "total_count": total,
+            "score": round(len(present) / total * 100, 1) if total else 0.0,
+        }
 
 
 # -------------------------------------------------------------------------
