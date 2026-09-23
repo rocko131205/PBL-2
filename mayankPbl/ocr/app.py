@@ -22,7 +22,9 @@ from src.balance_sheet_calculator import calculate_balance_sheet_metrics
 from src.liquidity_calculator import calculate_liquidity_metrics
 from src.agent_workflow import run_analysis
 from src.payload_mapper import payload_to_normalized_record
-from src.schema import DSCRInputs
+from src.schema import DSCRInputs, NormalizedCompanyRecord
+from src.debt_service import LoanTerms, compute_dscr_schedule
+from src.formatting import format_money, format_ratio, format_percent
 from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
 from src.yfinance_ingestion import fetch_by_ticker
 from src.private_company_ingestion import load_private_company_data, get_template_csv
@@ -869,6 +871,201 @@ def page_workflow() -> None:
         st.markdown('<div style="color:#444;font-size:11px;margin-top:12px;">▸ Run analysis on the Upload page to view agent constraints.</div>', unsafe_allow_html=True)
 
 
+_RISK_COLORS = {"LOW": "#00FF88", "MODERATE": "#FFB000", "HIGH": "#FF6B35", "CRITICAL": "#FF3333", "INSUFFICIENT_DATA": "#888"}
+
+
+def _render_debt_serviceability_v3(workflow_state: dict[str, Any]) -> None:
+    """V3 interactive DSCR: amortization schedule, per-year & minimum DSCR, stress tests."""
+    render_hr()
+    render_section_header(
+        "Debt Serviceability Analysis",
+        subtitle="V3 · DSCR across the full loan life, with stress testing",
+    )
+
+    record_data = workflow_state.get("company_record")
+    if not record_data:
+        st.info("Run an analysis first — this section needs the company's financial record.")
+        return
+
+    try:
+        record = NormalizedCompanyRecord(**record_data)
+    except Exception as exc:
+        st.warning(f"Could not read company record for debt-service analysis: {exc}")
+        return
+
+    ccy = record.currency
+
+    # Which numerator bases can we actually compute from the available data?
+    have = {
+        "ebitda": record.has_field("ebitda"),
+        "ebit": record.has_field("operating_income"),
+        "ocf": record.has_field("operating_cash_flow"),
+        "cfads": record.has_field("operating_cash_flow"),
+    }
+    basis_labels = {
+        "cfads": "CFADS — OCF + interest − capex (most conservative)",
+        "ocf": "Operating Cash Flow (+ interest add-back)",
+        "ebitda": "EBITDA (earnings proxy)",
+        "ebit": "EBIT / Operating Income",
+    }
+    available_bases = [b for b in ("cfads", "ocf", "ebitda", "ebit") if have[b]]
+
+    st.markdown(
+        '<p style="font-size:12px;color:#7A7D96;line-height:1.6;">'
+        "Enter the proposed loan terms. We build a year-by-year repayment schedule, compute the "
+        "<b>DSCR for every year</b>, and report the <b>minimum</b> (the tightest year — what a lender "
+        "underwrites against) plus how it holds up under stress.</p>",
+        unsafe_allow_html=True,
+    )
+
+    if not available_bases:
+        st.warning(
+            "No cash-flow basis available for DSCR (need EBITDA, Operating Income, or Operating Cash Flow). "
+            "Try a listed ticker, which includes the cash-flow statement."
+        )
+        return
+
+    with st.form("v3_dscr_form"):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            principal = st.number_input(f"Loan Amount ({ccy or 'currency'})", min_value=0.0, value=0.0, step=1000.0, key="v3_principal")
+            rate = st.number_input("Interest Rate (% p.a.)", min_value=0.0, max_value=100.0, value=10.0, step=0.25, key="v3_rate")
+        with c2:
+            tenure = st.number_input("Tenure (years)", min_value=1, max_value=40, value=5, step=1, key="v3_tenure")
+            structure = st.selectbox("Repayment Structure", ["equal_installment", "bullet", "balloon"], key="v3_structure")
+        with c3:
+            moratorium = st.number_input("Moratorium (years, interest-only)", min_value=0, max_value=10, value=0, step=1, key="v3_moratorium")
+            basis = st.selectbox("Cash basis (numerator)", available_bases,
+                                 format_func=lambda b: basis_labels[b], key="v3_basis")
+        existing_ds = st.number_input(f"Existing annual debt service ({ccy or 'currency'})", min_value=0.0, value=0.0, step=1000.0, key="v3_existing_ds")
+        submitted = st.form_submit_button("Compute Debt Serviceability", use_container_width=True)
+
+    if submitted:
+        st.session_state["v3_dscr_terms"] = {
+            "principal": principal, "annual_rate_pct": rate, "tenure_years": int(tenure),
+            "structure": structure, "moratorium_years": int(moratorium),
+            "existing_annual_debt_service": existing_ds, "basis": basis,
+        }
+
+    terms_dict = st.session_state.get("v3_dscr_terms")
+    if not terms_dict:
+        return
+    if terms_dict.get("principal", 0) <= 0:
+        st.info("Enter a loan amount above and click Compute.")
+        return
+
+    basis = terms_dict.get("basis", "cfads")
+    loan_kwargs = {k: v for k, v in terms_dict.items() if k != "basis"}
+    terms = LoanTerms(**loan_kwargs)
+    result = compute_dscr_schedule(record, terms, basis=basis)
+
+    if result.min_dscr is None:
+        st.warning("DSCR could not be computed with the available data. " + " ".join(result.notes))
+        return
+
+    color = _RISK_COLORS.get(result.risk_level.value, "#888")
+
+    # ── Headline ──────────────────────────────────────────────────────────
+    h1, h2, h3, h4 = st.columns(4)
+    h1.markdown(
+        f'<div style="text-align:center;"><div style="font-size:11px;color:#7A7D96;">MINIMUM DSCR</div>'
+        f'<div style="font-size:32px;font-weight:bold;color:{color};">{result.min_dscr:.2f}x</div>'
+        f'<div style="font-size:10px;color:#7A7D96;">worst year: Y{result.min_dscr_year}</div></div>',
+        unsafe_allow_html=True,
+    )
+    h2.markdown(
+        f'<div style="text-align:center;"><div style="font-size:11px;color:#7A7D96;">AVERAGE DSCR</div>'
+        f'<div style="font-size:32px;font-weight:bold;color:#E6E6E6;">{result.avg_dscr:.2f}x</div>'
+        f'<div style="font-size:10px;color:#7A7D96;">over {terms.tenure_years} years</div></div>',
+        unsafe_allow_html=True,
+    )
+    h3.markdown(
+        f'<div style="text-align:center;"><div style="font-size:11px;color:#7A7D96;">RISK LEVEL</div>'
+        f'<div style="font-size:22px;font-weight:bold;color:{color};margin-top:6px;">{result.risk_level.value}</div></div>',
+        unsafe_allow_html=True,
+    )
+    h4.markdown(
+        f'<div style="text-align:center;"><div style="font-size:11px;color:#7A7D96;">CASH BASIS</div>'
+        f'<div style="font-size:15px;font-weight:bold;color:#00BFFF;margin-top:8px;">{result.numerator_basis.upper()}</div>'
+        f'<div style="font-size:11px;color:#7A7D96;">{format_money(result.numerator_value, ccy)}/yr</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # Plain-language read
+    if result.min_dscr >= 1.5:
+        verdict = f"Comfortable: even in its tightest year the borrower's cash covers debt service {result.min_dscr:.2f}×."
+    elif result.min_dscr >= 1.0:
+        verdict = f"Tight: in year {result.min_dscr_year} coverage falls to {result.min_dscr:.2f}× — little buffer."
+    else:
+        verdict = f"Shortfall: in year {result.min_dscr_year} cash covers only {result.min_dscr:.2f}× of debt service (below 1.0× = cannot fully pay)."
+    st.markdown(
+        f'<div style="font-size:13px;color:#D8D8E0;margin:14px 0;padding:12px;background:#0B0C10;border-left:3px solid {color};border-radius:3px;">{html.escape(verdict)}</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Coverage companions
+    cov = []
+    if result.interest_coverage is not None:
+        cov.append(f"Interest Coverage: **{result.interest_coverage:.2f}x**")
+    if result.debt_to_ebitda is not None:
+        cov.append(f"Debt / EBITDA: **{result.debt_to_ebitda:.2f}x**")
+    if cov:
+        st.markdown('<span style="font-size:12px;color:#7A7D96;">Companion coverage — </span>' + " · ".join(cov))
+
+    # ── DSCR by year chart ────────────────────────────────────────────────
+    chart_col, tbl_col = st.columns([1, 1])
+    with chart_col:
+        st.markdown("**DSCR by year**")
+        df_chart = pd.DataFrame(
+            {"DSCR": [d for d in result.dscr_by_year]},
+            index=[f"Y{r.year}" for r in result.schedule],
+        )
+        st.line_chart(df_chart, height=220)
+        st.caption("The 1.0× line is the danger threshold — below it, that year's cash can't cover debt service.")
+
+    with tbl_col:
+        st.markdown("**Amortization schedule**")
+        rows = []
+        for r, d in zip(result.schedule, result.dscr_by_year):
+            rows.append({
+                "Yr": r.year,
+                "Principal": format_money(r.principal, ccy, decimals=1),
+                "Interest": format_money(r.interest, ccy, decimals=1),
+                "Payment": format_money(r.total_payment, ccy, decimals=1),
+                "DSCR": f"{d:.2f}x" if d is not None else "—",
+            })
+        st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True, height=220)
+
+    # ── Stress tests ──────────────────────────────────────────────────────
+    if result.stress_results:
+        st.markdown("**Stress tests** — how the minimum DSCR holds up if things go wrong")
+        srows = []
+        for s in result.stress_results:
+            srows.append({
+                "Scenario": s.description,
+                "Min DSCR": f"{s.min_dscr:.2f}x" if s.min_dscr is not None else "—",
+                "Δ vs base": f"{s.delta_vs_base:+.2f}" if s.delta_vs_base is not None else "—",
+                "Below 1.0x?": "⚠️ YES" if s.breaches_1x else "no",
+            })
+        st.dataframe(pd.DataFrame(srows), hide_index=True, use_container_width=True)
+        breaches = [s for s in result.stress_results if s.breaches_1x]
+        if breaches:
+            st.markdown(
+                f'<div style="font-size:12px;color:#FF6B35;padding:8px 12px;background:#1A0D00;border-radius:3px;">'
+                f'⚠️ Coverage falls below 1.0× under {len(breaches)} stress scenario(s) — the borrower would struggle to repay if these occur.</div>',
+                unsafe_allow_html=True,
+            )
+
+    # ── Methodology ───────────────────────────────────────────────────────
+    with st.expander("DSCR Methodology & Assumptions"):
+        st.markdown(f"- **Numerator (cash available):** {result.numerator_formula} = {format_money(result.numerator_value, ccy)}")
+        st.markdown(f"- **Denominator:** scheduled principal + interest each year" + (f" + existing debt service {format_money(terms.existing_annual_debt_service, ccy)}" if terms.existing_annual_debt_service else ""))
+        st.markdown(f"- **Structure:** {terms.structure}" + (f", {terms.moratorium_years}yr moratorium" if terms.moratorium_years else ""))
+        st.markdown("- **Assumption:** annual cash held constant across the loan life (conservative — no growth assumed).")
+        for n in result.notes:
+            st.markdown(f"- ⚠️ {n}")
+
+
 def page_analysis() -> None:
     render_section_header("Financial Analysis Output", subtitle="V2 Deterministic Metrics & Credit Assessment")
 
@@ -1183,6 +1380,9 @@ def page_analysis() -> None:
         # ── V1 Backward-compat cards ──────────────────────────────────────
         render_agent_card("Liquidity Calculator", outputs.get("liquidity", {}), css_variant="liq", icon="◈")
         render_agent_card("Balance Sheet Calculator", outputs.get("balance_sheet", {}), css_variant="bs", icon="◇")
+
+    # ── V3: Debt Serviceability Analysis (interactive DSCR schedule + stress) ──
+    _render_debt_serviceability_v3(workflow_state)
 
     # ── Credit Assessment Report ──────────────────────────────────────────
     render_hr()
