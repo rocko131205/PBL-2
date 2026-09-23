@@ -58,6 +58,12 @@ _BALANCE_MAP: dict[str, str] = {
     "Common Stock Equity":                                  "equity",
     "Total Equity Gross Minority Interest":                 "equity",
     "Retained Earnings":                                    "retained_earnings",
+    "Accounts Receivable":                                  "accounts_receivable",
+    "Receivables":                                          "accounts_receivable",
+    "Inventory":                                            "inventory",
+    "Accounts Payable":                                     "accounts_payable",
+    "Payables":                                             "accounts_payable",
+    "Payables And Accrued Expenses":                        "accounts_payable",
 }
 
 

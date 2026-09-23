@@ -1669,6 +1669,9 @@ def page_analysis() -> None:
         # ── V2 Liquidity Metrics (fact ledger) ────────────
         _render_ledger_category(fact_ledger_data, "liquidity", "Liquidity")
 
+        # ── V3 Working-Capital Cycle ──────────────────────
+        _render_ledger_category(fact_ledger_data, "working_capital", "Working Capital Cycle")
+
         # ── V2 Solvency Metrics ───────────────────────────
         if fact_ledger_data:
             solv_entries = [e for e in fact_ledger_data.get("entries", []) if e.get("category") == "solvency"]

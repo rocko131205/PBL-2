@@ -55,6 +55,7 @@ from .schema import (
 )
 from .solvency_calculator import compute_solvency_metrics
 from .liquidity_metrics import compute_liquidity_metrics
+from .working_capital import compute_working_capital_cycle
 
 
 # -------------------------------------------------------------------------
@@ -314,6 +315,14 @@ def financial_computation_node(state: WorkflowState) -> WorkflowState:
         _log(state, f"Financial Computation: {len(liquidity)} liquidity metrics computed")
     except Exception as exc:
         state.setdefault("errors", []).append(f"Liquidity calc: {exc}")
+
+    # Working-capital cycle
+    try:
+        wc = compute_working_capital_cycle(record)
+        all_entries.extend(wc)
+        _log(state, f"Financial Computation: {len(wc)} working-capital metrics computed")
+    except Exception as exc:
+        state.setdefault("errors", []).append(f"Working capital calc: {exc}")
 
     # SaaS metrics — only for software companies (meaningless for a bank/airline/etc.)
     if _is_software_company(state.get("company_profile", {})):

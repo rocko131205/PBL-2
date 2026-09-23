@@ -177,6 +177,9 @@ class NormalizedCompanyRecord(BaseModel):
     non_current_assets: List[FinancialPeriod] = Field(default_factory=list)
     non_current_liabilities: List[FinancialPeriod] = Field(default_factory=list)
     retained_earnings: List[FinancialPeriod] = Field(default_factory=list)
+    accounts_receivable: List[FinancialPeriod] = Field(default_factory=list)
+    inventory: List[FinancialPeriod] = Field(default_factory=list)
+    accounts_payable: List[FinancialPeriod] = Field(default_factory=list)
 
     # Cash flow statement (V3: critical for real debt-service analysis)
     operating_cash_flow: List[FinancialPeriod] = Field(default_factory=list)
@@ -224,7 +227,8 @@ class NormalizedCompanyRecord(BaseModel):
         "total_assets", "total_liabilities", "current_assets", "current_liabilities",
         "equity", "total_debt", "long_term_debt", "short_term_debt",
         "cash_and_equivalents", "non_current_assets", "non_current_liabilities",
-        "retained_earnings", "basic_eps", "diluted_eps",
+        "retained_earnings", "accounts_receivable", "inventory", "accounts_payable",
+        "basic_eps", "diluted_eps",
     ]
 
     # Fields expressed in currency (converted during FX normalization).
@@ -238,7 +242,8 @@ class NormalizedCompanyRecord(BaseModel):
         "total_assets", "total_liabilities", "current_assets", "current_liabilities",
         "equity", "total_debt", "long_term_debt", "short_term_debt",
         "cash_and_equivalents", "non_current_assets", "non_current_liabilities",
-        "retained_earnings", "basic_eps", "diluted_eps",
+        "retained_earnings", "accounts_receivable", "inventory", "accounts_payable",
+        "basic_eps", "diluted_eps",
     ]
 
     def available_fields(self) -> List[str]:

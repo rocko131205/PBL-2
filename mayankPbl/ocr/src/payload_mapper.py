@@ -36,6 +36,9 @@ _FIELD_MAP: Dict[str, str] = {
     "non_current_assets":      "non_current_assets",
     "non_current_liabilities": "non_current_liabilities",
     "retained_earnings":       "retained_earnings",
+    "accounts_receivable":     "accounts_receivable",
+    "inventory":               "inventory",
+    "accounts_payable":        "accounts_payable",
     "basic_eps":               "basic_eps",
     "diluted_eps":             "diluted_eps",
 }

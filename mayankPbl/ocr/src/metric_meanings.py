@@ -32,6 +32,11 @@ MEANINGS: dict[str, str] = {
     "cash_ratio": "Whether cash alone covers short-term bills — the strictest liquidity test.",
     # Debt service
     "dscr": "Whether cash covers loan payments — above 1 means it can pay, higher is safer.",
+    # Working capital
+    "dso": "Average days to collect cash from customers — lower is better.",
+    "dio": "Average days inventory sits before being sold — lower ties up less cash.",
+    "dpo": "Average days taken to pay suppliers — higher keeps cash longer (within reason).",
+    "cash_conversion_cycle": "Net days cash is tied up in operations (collect + hold − pay) — lower is healthier.",
     # SaaS
     "saas_revenue_growth": "How fast revenue is growing year over year.",
     "saas_revenue_cagr_3yr": "Smoothed annual growth rate over three years.",
