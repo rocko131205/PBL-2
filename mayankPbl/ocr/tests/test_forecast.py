@@ -1,8 +1,8 @@
 """V3 Phase 5 — forecasting tests."""
 from __future__ import annotations
 
-from shared.schema import NormalizedCompanyRecord, FinancialPeriod
-from analysis.engines.forecast import forecast_field, _cagr, _next_periods
+from finveritas.shared.schema import NormalizedCompanyRecord, FinancialPeriod
+from finveritas.analysis.metrics.forecast import forecast_field, _cagr, _next_periods
 
 
 def _rec_revenue(values):

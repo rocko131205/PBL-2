@@ -1,5 +1,5 @@
 """V3 — robust LLM JSON extractor tests."""
-from analysis.agents.agent_workflow import _extract_json
+from finveritas.analysis.workflow import _extract_json
 
 
 def test_direct_object():

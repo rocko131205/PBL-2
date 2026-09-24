@@ -1,6 +1,6 @@
 """V3 — working-capital cycle tests."""
-from shared.schema import NormalizedCompanyRecord, FinancialPeriod
-from analysis.engines.working_capital import compute_working_capital_cycle
+from finveritas.shared.schema import NormalizedCompanyRecord, FinancialPeriod
+from finveritas.analysis.metrics.working_capital import compute_working_capital_cycle
 
 
 def _rec(**latest):

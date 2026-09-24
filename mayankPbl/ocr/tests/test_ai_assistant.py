@@ -1,7 +1,7 @@
 """V3 Phase 7 — AI assistant grounding tests (no live LLM calls)."""
 from __future__ import annotations
 
-from analysis.agents.ai_assistant import build_fact_context, answer_question
+from finveritas.analysis.assistant import build_fact_context, answer_question
 
 
 def _state():

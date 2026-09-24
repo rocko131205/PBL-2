@@ -333,13 +333,13 @@ Run the OCR extraction pipeline without starting the Streamlit server:
 
 ```sh
 # Default: reads from input_pdfs/, writes to output/
-python3 -m ingestion.pdf.main
+python3 -m finveritas.ingestion.pdf.cli
 
 # Custom paths
-python3 -m ingestion.pdf.main --input path/to/pdfs --output path/to/output
+python3 -m finveritas.ingestion.pdf.cli --input path/to/pdfs --output path/to/output
 
 # Verbose logging
-python3 -m ingestion.pdf.main --verbose
+python3 -m finveritas.ingestion.pdf.cli --verbose
 ```
 
 ---

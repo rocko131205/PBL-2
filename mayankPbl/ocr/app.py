@@ -14,24 +14,24 @@ import pandas as pd
 import streamlit as st
 from streamlit_agraph import Config, Edge, Node, agraph
 
-from analysis.agents.agent_workflow import run_analysis
-from ingestion.payload_mapper import payload_to_normalized_record
-from shared.schema import DSCRInputs, NormalizedCompanyRecord
-from analysis.engines.debt_service import LoanTerms, compute_dscr_schedule
-from analysis.engines.credit_scorecard import compute_scorecard
-from analysis.engines.credit_memo import build_memo, render_memo_html
-from analysis.engines.forecast import forecast_field
-from analysis.agents.ai_assistant import explain_results, answer_question
-from analysis.engines.anomaly_engine import detect_anomalies
-from shared.metric_meanings import meaning_for
-from ingestion.scale_detection import rescale_payload
-from shared.formatting import format_money, format_ratio, format_percent
-from ingestion.pdf.pdf_parser import parse_pdf_to_json, payload_to_agent_files
-from ingestion.yfinance_ingestion import fetch_by_ticker
-from ingestion.private_company_ingestion import load_private_company_data, get_template_csv
-from ingestion.supplemental_fetchers import auto_fetch_missing_fields
-from ingestion.data_verifier import run_verification, CredibilityReport, STATUS_PASS, STATUS_WARN, STATUS_FAIL, STATUS_SKIP
-from shared.components import (
+from finveritas.analysis.workflow import run_analysis
+from finveritas.ingestion.normalize import payload_to_normalized_record
+from finveritas.shared.schema import DSCRInputs, NormalizedCompanyRecord
+from finveritas.analysis.metrics.debt_service import LoanTerms, compute_dscr_schedule
+from finveritas.analysis.metrics.scorecard import compute_scorecard
+from finveritas.analysis.metrics.memo import build_memo, render_memo_html
+from finveritas.analysis.metrics.forecast import forecast_field
+from finveritas.analysis.assistant import explain_results, answer_question
+from finveritas.analysis.metrics.anomaly import detect_anomalies
+from finveritas.shared.meanings import meaning_for
+from finveritas.ingestion.scale import rescale_payload
+from finveritas.shared.formatting import format_money, format_ratio, format_percent
+from finveritas.ingestion.pdf.loader import parse_pdf_to_json, payload_to_agent_files
+from finveritas.ingestion.ticker import fetch_by_ticker
+from finveritas.ingestion.spreadsheet import load_private_company_data, get_template_csv
+from finveritas.ingestion.supplemental import auto_fetch_missing_fields
+from finveritas.ingestion.credibility import run_verification, CredibilityReport, STATUS_PASS, STATUS_WARN, STATUS_FAIL, STATUS_SKIP
+from finveritas.shared.components import (
     agent_tooltip_html,
     inject_theme_vars,
     load_css,
@@ -42,17 +42,17 @@ from shared.components import (
     render_section_header,
     render_top_bar,
 )
-from auth.auth_controller import decode_token
-from auth.ui_pages import page_login, page_register, page_forgot_password, page_history
-from auth.db import get_file_history, make_history_doc
+from finveritas.auth.controller import decode_token
+from finveritas.auth.pages import page_login, page_register, page_forgot_password, page_history
+from finveritas.auth.db import get_file_history, make_history_doc
 
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from ingestion.upload_page import page_upload
-from analysis.analysis_page import page_workflow, page_analysis, page_basel
+from finveritas.ingestion.page import page_upload
+from finveritas.analysis.page import page_workflow, page_analysis, page_basel
 
 _DEFAULT_BASE_URL     = os.getenv("LLM_BASE_URL") or os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234/v1")
 _DEFAULT_MODEL        = os.getenv("LLM_MODEL", "qwen2.5-coder-1.5b-instruct-mlx")

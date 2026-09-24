@@ -1,10 +1,10 @@
 """V3 Phase 1 — data foundation tests (currency, formatting, cash flow, completeness)."""
 from __future__ import annotations
 
-from shared.schema import NormalizedCompanyRecord, FinancialPeriod
-from shared.currency import get_fx_rate, normalize_record_currency
-from shared.formatting import format_money, format_ratio, format_percent, currency_symbol
-from ingestion.payload_mapper import payload_to_normalized_record
+from finveritas.shared.schema import NormalizedCompanyRecord, FinancialPeriod
+from finveritas.shared.currency import get_fx_rate, normalize_record_currency
+from finveritas.shared.formatting import format_money, format_ratio, format_percent, currency_symbol
+from finveritas.ingestion.normalize import payload_to_normalized_record
 
 
 def _rec(currency="USD", **series):
@@ -120,13 +120,13 @@ class TestCompleteness:
 
 class TestSaaSGating:
     def test_software_detected(self):
-        from analysis.agents.agent_workflow import _is_software_company
+        from finveritas.analysis.workflow import _is_software_company
         assert _is_software_company({"is_saas": True})
         assert _is_software_company({"saas_subtype": "CRM"})
         assert _is_software_company({"industry": "Application Software"})
 
     def test_non_software_skipped(self):
-        from analysis.agents.agent_workflow import _is_software_company
+        from finveritas.analysis.workflow import _is_software_company
         assert not _is_software_company({"industry": "Banks", "saas_subtype": "non_saas"})
         assert not _is_software_company({"industry": "Airlines"})
         assert not _is_software_company({})
