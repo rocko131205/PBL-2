@@ -153,40 +153,15 @@ Built in tested, committed phases (109 tests passing):
 - Harden the LLM layer (reliable JSON parsing + stronger-model option).
 - Persist analyses to MongoDB (history + compare over time).
 - Peer percentile positioning + radar chart.
-- Further capability agents from the *V2 Master Implementation Brief*:
+- Further capability agents from the original V2 roadmap:
   Assumption Validation, Anomaly/Alert detection, Working Capital & MPBF,
   Geography-wise impact, Executive/Governance background.
 
 ---
 
-## Where things live (current file map)
+## Where things live
 
-```
-PBL-2/
-├── VERSION_HISTORY.md          ← this file
-├── FinVeritas V2 — ... Brief.md  ← the full V2/roadmap vision
-└── mayankPbl/ocr/
-    ├── app.py                  ← Streamlit app (UI + wiring)
-    ├── requirements.txt
-    ├── README.md               ← setup & feature guide
-    ├── src/
-    │   ├── schema.py           ← Fact Ledger + all data models (the "contract")
-    │   ├── agent_workflow.py   ← LangGraph orchestration (the 5 nodes)
-    │   ├── dscr_engine.py      ← real DSCR calculation
-    │   ├── profitability_calculator.py
-    │   ├── solvency_calculator.py
-    │   ├── liquidity_calculator.py
-    │   ├── revenue_calculator.py
-    │   ├── saas_engine.py
-    │   ├── risk_indicator_engine.py
-    │   ├── data_verifier.py    ← credibility scoring
-    │   ├── payload_mapper.py   ← raw data → NormalizedCompanyRecord
-    │   ├── yfinance_ingestion.py / private_company_ingestion.py / supplemental_fetchers.py
-    │   └── extractor.py / parser.py / mapper.py / builder.py / main.py  ← PDF OCR pipeline
-    ├── ocr/pdf_parser.py       ← Streamlit-facing OCR wrapper
-    ├── ui/                     ← dashboard components + CSS
-    ├── auth/                   ← login, MongoDB, JWT, OTP
-    └── tests/                  ← 52 tests (test_calculators.py, test_integration.py)
-```
+All source is under `mayankPbl/ocr/finveritas/`, grouped by the user journey.
+See **[STRUCTURE.md](STRUCTURE.md)** for the full file tree and execution flow.
 
-*Last updated: 2026-09-24 (V3 revamp phases 1–6 built on branch `V3-revamp`).*
+*Last updated: 2026-09-24 (V3 revamp built on branch `V3-revamp`).*

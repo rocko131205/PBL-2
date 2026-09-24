@@ -280,50 +280,10 @@ Period format is always `YYYY-FY` (annual) or `YYYY-QN` (quarterly). The parser 
 
 ## Project Structure
 
-> For the full story of how the architecture evolved (V1 → V2 → V3), see
-> [`../../VERSION_HISTORY.md`](../../VERSION_HISTORY.md).
-
-```
-ocr/
-├── app.py                           # Main Streamlit app (UI + pipeline wiring)
-├── requirements.txt
-├── AGENTS.md                        # Developer reference for the OCR pipeline
-│
-├── src/                             # Core logic
-│   │  ── V2 architecture ──
-│   ├── schema.py                    # Fact Ledger + all data models (the contract)
-│   ├── agent_workflow.py            # LangGraph orchestration (5 agent nodes)
-│   ├── dscr_engine.py               # Real DSCR calculation (methodology-aware)
-│   ├── profitability_calculator.py  # Margins, ROE, ROA, ROCE
-│   ├── solvency_calculator.py       # Leverage / debt ratios
-│   ├── liquidity_calculator.py      # Current ratio, working capital
-│   ├── revenue_calculator.py        # Growth, CAGR
-│   ├── saas_engine.py               # SaaS metrics from actual growth
-│   ├── risk_indicator_engine.py     # Consolidated risk dashboard
-│   ├── payload_mapper.py            # Raw payload → NormalizedCompanyRecord
-│   ├── data_verifier.py             # Credibility scoring engine
-│   ├── supplemental_fetchers.py     # FMP + Alpha Vantage auto-fill
-│   ├── yfinance_ingestion.py        # Ticker-based data fetch
-│   ├── private_company_ingestion.py # CSV/Excel ingestion
-│   │  ── PDF OCR pipeline ──
-│   ├── extractor.py                 # pdfplumber → PDFContent
-│   ├── parser.py                    # PDFContent → ParsedStatement
-│   ├── mapper.py                    # Bloomberg label → canonical key
-│   ├── builder.py                   # ParsedStatement[] → company JSON
-│   └── main.py                      # CLI entry point
-│
-├── ocr/
-│   └── pdf_parser.py                # Streamlit-facing OCR wrapper
-│
-├── ui/
-│   ├── dashboard_components.py      # render_* functions, theme injection
-│   └── styles.css                   # Full CSS design system (dark/light)
-│
-├── auth/                            # Login, MongoDB, JWT, email OTP
-├── tests/                           # 52 tests (test_calculators, test_integration)
-├── input_pdfs/                      # Drop PDFs here for CLI mode (gitignored)
-└── output/                          # JSON outputs written at runtime (gitignored)
-```
+All source lives under one package, `finveritas/`, grouped by the user journey
+(auth → ingestion → analysis → shared). See **[STRUCTURE.md](STRUCTURE.md)** for the
+full tree and execution flow, and **[VERSION_HISTORY.md](VERSION_HISTORY.md)** for how
+the architecture evolved (V1 → V2 → V3).
 
 ---
 
