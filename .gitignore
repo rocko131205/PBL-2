@@ -14,10 +14,6 @@ env/
 # Environment secrets — NEVER commit these
 .env
 
-# Runtime output (generated at runtime, not source code)
-output/
-input_pdfs/
-
 # IDEs
 .idea/
 .vscode/

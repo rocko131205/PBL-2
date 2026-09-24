@@ -29,8 +29,7 @@ PBL-2/                          ← repo root
 │   │       ├── parser.py       PDFContent → ParsedStatement
 │   │       ├── labels.py       Bloomberg label → canonical field
 │   │       ├── builder.py      statements → company JSON
-│   │       ├── loader.py       Streamlit-facing wrapper
-│   │       └── cli.py          CLI entry (python3 -m finveritas.ingestion.pdf.cli)
+│   │       └── loader.py       parses uploaded PDFs into the payload (in memory)
 │   │
 │   ├── analysis/               ── 3. ANALYSE & PRESENT (the results) ──────────
 │   │   ├── page.py             the results screens (verdict, scorecard, DSCR,
@@ -73,6 +72,5 @@ PBL-2/                          ← repo root
 ```sh
 cd PBL-2
 source .venv/bin/activate
-streamlit run app.py                       # the app
-python3 -m finveritas.ingestion.pdf.cli    # headless PDF→JSON CLI
+streamlit run app.py
 ```

@@ -503,9 +503,9 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
                 st.session_state["active_source"] = "pdf"
                 st.session_state["ocr_cache"] = st.session_state["cache_pdf"]
                 st.session_state.pop("agent_outputs", None)
-                st.success(f"OCR complete — {len(uploads)} PDF(s) merged → `{written_path.name}`")
+                st.success(f"OCR complete — {len(uploads)} PDF(s) merged.")
             else:
-                st.info(f"Cached: `{cached_pdf['written_path'].name}`")
+                st.info(f"Cached: {cached_pdf.get('source_label', 'uploaded PDF(s)')}")
 
     # ── Tab 2: Fetch by Ticker (yfinance) ────────────────────────────────────
     elif ingestion_mode == "Fetch by Ticker":
@@ -635,9 +635,9 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
         return
 
     payload    = cached["payload"]
-    agent_paths = cached["agent_paths"]
-    written_path = cached["written_path"]
-    source_label = cached.get("source_label", written_path.name)
+    agent_paths = cached.get("agent_paths", {})
+    written_path = cached.get("written_path")
+    source_label = cached.get("source_label", "uploaded data")
 
     render_hr()
     render_section_header("Extracted Key Metrics", subtitle=f"Source: {source_label}")

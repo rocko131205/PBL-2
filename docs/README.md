@@ -112,15 +112,6 @@ numbers work regardless.
 
 ---
 
-## CLI (headless PDF → JSON)
-
-```sh
-python3 -m finveritas.ingestion.pdf.cli                                   # input_pdfs/ → output/
-python3 -m finveritas.ingestion.pdf.cli --input path/to/pdfs --output out
-```
-
----
-
 ## Testing
 
 ```sh
