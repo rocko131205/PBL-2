@@ -27,6 +27,7 @@ from src.forecast import forecast_field
 from src.ai_assistant import explain_results, answer_question
 from src.anomaly_engine import detect_anomalies
 from src.metric_meanings import meaning_for
+from src.scale_detection import rescale_payload
 from src.formatting import format_money, format_ratio, format_percent
 from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
 from src.yfinance_ingestion import fetch_by_ticker
@@ -390,6 +391,11 @@ def _run_agent_pipeline(
 
     entity = str(payload.get("entity", {}).get("entity_id") or "UNKNOWN")
 
+    # Apply the user-selected reporting scale so the analysis uses true magnitudes.
+    _scale = st.session_state.get("reported_scale", 1.0)
+    if _scale and _scale != 1.0:
+        payload = rescale_payload(payload, _scale)
+
     # V2/V3 Agentic Workflow — all financial metrics (profitability, liquidity, solvency,
     # DSCR, etc.) are computed deterministically inside the workflow's fact ledger.
     st.markdown("### Agentic Orchestration")
@@ -647,8 +653,32 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
 
     render_hr()
     render_section_header("Extracted Key Metrics", subtitle=f"Source: {source_label}")
-    render_metric_cards(payload)
-    
+
+    # ── Reporting scale — so magnitudes are correct (e.g. "₹ in millions/crore") ──
+    active_source = st.session_state.get("active_source", "pdf")
+    if active_source == "ticker":
+        # yfinance already returns absolute values — no rescaling needed.
+        st.session_state["reported_scale"] = 1.0
+        display_payload = payload
+    else:
+        _scale_opts = {
+            "Absolute (as-is)": 1.0, "Thousands": 1e3, "Lakhs": 1e5,
+            "Millions": 1e6, "Crores": 1e7, "Billions": 1e9,
+        }
+        st.caption(
+            "⚖️ If the statement reports figures in a scaled unit (e.g. *“₹ in millions”* or "
+            "*“in crore”*), select it so the numbers below show their true magnitude."
+        )
+        _choice = st.selectbox("Figures in the source are reported in", list(_scale_opts.keys()),
+                               key="scale_choice", label_visibility="collapsed")
+        _mult = _scale_opts[_choice]
+        st.session_state["reported_scale"] = _mult
+        display_payload = rescale_payload(payload, _mult)
+        if _mult != 1.0:
+            st.caption(f"Showing values ×{_mult:,.0f} (converted from *{_choice.lower()}* to absolute).")
+
+    render_metric_cards(display_payload)
+
     qualitative_text = (payload.get("entity") or {}).get("qualitative_context", "")
     st.markdown("### Qualitative Context (optional)")
     st.caption(

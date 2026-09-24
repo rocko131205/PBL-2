@@ -57,8 +57,15 @@ class TestCurrencyNormalization:
 
 
 class TestFormatting:
-    def test_billions(self):
-        assert format_money(256_345_567_000, "INR") == "₹256.35B"
+    def test_billions_usd(self):
+        assert format_money(256_345_567_000, "USD") == "$256.35B"
+
+    def test_inr_uses_crore(self):
+        # 1,48,903 crore (Infosys-scale) — Indian convention, not "B"
+        assert format_money(1_489_030_000_000, "INR") == "₹148,903.00 Cr"
+
+    def test_inr_uses_lakh(self):
+        assert format_money(504_000, "INR") == "₹5.04 L"
 
     def test_millions_and_symbol(self):
         assert format_money(1_200_000, "USD") == "$1.20M"

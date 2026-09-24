@@ -21,10 +21,15 @@ def currency_symbol(currency: Optional[str]) -> str:
     return _CURRENCY_SYMBOLS.get(currency.upper(), f"{currency.upper()} ")
 
 
-def format_money(value: Optional[float], currency: Optional[str] = None, decimals: int = 2) -> str:
-    """Format a monetary value as e.g. '₹256.3B', '$1.20M', '-$4.5K'.
+# Currencies that conventionally use the Indian lakh/crore system.
+_LAKH_CRORE_CCY = {"INR", "PKR", "LKR", "NPR", "BDT"}
 
-    Scales by magnitude: T (trillion), B (billion), M (million), K (thousand).
+
+def format_money(value: Optional[float], currency: Optional[str] = None, decimals: int = 2) -> str:
+    """Format a monetary value with country-appropriate scaling.
+
+    - INR (and other South-Asian currencies): lakh (L) / crore (Cr) — e.g. '₹1,48,903 Cr'.
+    - Everyone else: K / M / B / T — e.g. '$1.20M', '₹256.3B'.
     Returns 'N/A' for None.
     """
     if value is None:
@@ -33,6 +38,14 @@ def format_money(value: Optional[float], currency: Optional[str] = None, decimal
     sym = currency_symbol(currency)
     sign = "-" if value < 0 else ""
     v = abs(float(value))
+    ccy = (currency or "").upper()
+
+    if ccy in _LAKH_CRORE_CCY:
+        if v >= 1e7:      # >= 1 crore
+            return f"{sign}{sym}{v / 1e7:,.{decimals}f} Cr"
+        if v >= 1e5:      # >= 1 lakh
+            return f"{sign}{sym}{v / 1e5:,.{decimals}f} L"
+        return f"{sign}{sym}{v:,.{decimals}f}"
 
     if v >= 1e12:
         scaled, suffix = v / 1e12, "T"
