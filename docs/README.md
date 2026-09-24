@@ -66,13 +66,13 @@ system evolved (V1 → V2 → V3), see **[VERSION_HISTORY.md](VERSION_HISTORY.md
 
 ```sh
 git clone https://github.com/rocko131205/PBL-2.git
-cd PBL-2/mayankPbl/ocr
+cd PBL-2
 python3 -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 streamlit run app.py                                    # open http://localhost:8501
 ```
 
-### Environment variables (`.env` in `mayankPbl/ocr/`)
+### Environment variables (`.env` in the repo root)
 
 ```env
 # Security

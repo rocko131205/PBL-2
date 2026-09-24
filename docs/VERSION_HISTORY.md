@@ -161,7 +161,7 @@ Built in tested, committed phases (109 tests passing):
 
 ## Where things live
 
-All source is under `mayankPbl/ocr/finveritas/`, grouped by the user journey.
+All source is under `finveritas/`, grouped by the user journey.
 See **[STRUCTURE.md](STRUCTURE.md)** for the full file tree and execution flow.
 
 *Last updated: 2026-09-24 (V3 revamp built on branch `V3-revamp`).*

@@ -4,9 +4,10 @@ All application code lives under one package, **`finveritas/`**, so the project 
 stays clean. Inside, code is grouped by the **user journey**, in execution order.
 
 ```
-ocr/
+PBL-2/                          ← repo root
 ├── app.py                      ← ENTRY POINT / router (auth gate, sidebar nav, dispatch)
 ├── requirements.txt
+├── docs/                       ← all documentation
 ├── finveritas/                 ← ALL source code
 │   │
 │   ├── auth/                   ── 1. LOGIN / SIGNUP (runs first) ──────────────
@@ -70,7 +71,7 @@ ocr/
 ## Run it
 
 ```sh
-cd mayankPbl/ocr
+cd PBL-2
 source .venv/bin/activate
 streamlit run app.py                       # the app
 python3 -m finveritas.ingestion.pdf.cli    # headless PDF→JSON CLI
