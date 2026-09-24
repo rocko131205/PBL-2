@@ -25,3 +25,8 @@ input_pdfs/
 .idea/
 .vscode/
 *.swp
+
+# R (not used — this is a Python project)
+.Rhistory
+.RData
+.Rproj.user/
