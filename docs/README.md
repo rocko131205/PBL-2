@@ -1,332 +1,174 @@
-# FinVeritas — Explainable Financial Analysis Platform
+# FinVeritas — Explainable Credit-Risk Analysis
 
-> **Financial truth, quantified.**  
-> A Bloomberg Terminal-inspired dashboard that ingests financial statements, verifies their credibility, computes metrics deterministically, and uses a local LLM exclusively to narrate — never to calculate.
-
----
-
-## Overview
-
-FinVeritas is a multi-agent financial analysis system built as a Streamlit app. It accepts data from three sources — Bloomberg PDFs, listed company tickers (Yahoo Finance), and private company CSV/Excel files — and routes them through a pipeline of five specialized agents that compute ratios, detect risk flags, and generate plain-English explanations. A built-in credibility engine scores the trustworthiness of every data load before analysis begins.
-
-**Core principle:** All financial math is done in Python (pandas / numpy). The LLM never touches raw numbers — it only receives a pre-computed metric dictionary and turns it into a readable narrative.
+> **Financial truth, quantified.**
+> A credit-underwriting assistant that ingests a company's financials and produces a
+> defensible read on **can they repay, how risky, and on what terms** — with every
+> number computed deterministically in Python and the LLM used only to *explain*, never
+> to calculate.
 
 ---
 
-## Pipeline
+## The one rule
 
+**Python computes every number; the AI only narrates.** Ratios, DSCR, the credit grade,
+default-probability bands — all deterministic. The LLM classifies the company, picks peer
+tickers (whose data is then *fetched*, not guessed), and turns the computed facts into
+plain English. It can never invent or change a figure.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TD
+    U(["User"]) --> AUTH["Auth: login / signup<br/>JWT, OTP, MongoDB"]
+    AUTH --> UP["Upload Page"]
+
+    UP --> SRC{"Data source?"}
+    SRC -->|"Bloomberg PDF"| PDF["PDF OCR chain<br/>extractor to parser to labels to builder"]
+    SRC -->|"Ticker"| TIC["ticker (yfinance)"]
+    SRC -->|"CSV / Excel"| CSV["spreadsheet"]
+    PDF --> NORM["normalize to NormalizedCompanyRecord"]
+    TIC --> NORM
+    CSV --> NORM
+    NORM --> SCALE["scale: reported units to absolute"]
+    SCALE --> CRED["credibility score 0-100"]
+    CRED --> WF["LangGraph Workflow"]
+
+    WF --> CI["Company Intelligence (LLM)"]
+    CI --> FC["Financial Computation"]
+    FC --> ENG["Metrics engines:<br/>profitability, solvency, liquidity,<br/>working capital, DSCR + stress,<br/>scorecard, anomaly, forecast"]
+    ENG --> LEDGER[("Fact Ledger<br/>immutable, deterministic")]
+    LEDGER --> PEER["Peer Analysis<br/>LLM picks tickers, real data fetched"]
+    PEER --> QUAL["Qualitative (LLM)"]
+    QUAL --> CA["Credit Assessment (LLM narrative)"]
+    CA --> OUT["Analysis Page:<br/>verdict, scorecard, DSCR, memo"]
+    LEDGER --> AI["AI Assistant<br/>explain / ask (guardrailed)"]
+
+    OUT --> U
+    AI --> U
+    AUTH -.-> DB[("MongoDB<br/>users, history")]
+
+    classDef llm fill:#2b1a4a,stroke:#a78bfa,color:#e9d5ff;
+    classDef det fill:#0d2818,stroke:#34d399,color:#bbf7d0;
+    class CI,PEER,QUAL,CA,AI llm;
+    class FC,ENG,LEDGER,SCALE,CRED det;
 ```
-Data Source (Bloomberg PDF / Ticker / CSV)
-        │
-        ▼
-  OCR & Ingestion Layer
-  ├── pdfplumber (Bloomberg PDFs)
-  ├── yfinance   (Listed tickers)
-  └── pandas     (Private CSV / Excel)
-        │
-        ▼
-  Data Credibility Engine          ← scores source authenticity + completeness
-        │
-        ▼
-  ┌─────────────────────────────────────────────────┐
-  │              Agent Pipeline                      │
-  │                                                  │
-  │  Revenue Agent        → YoY growth, CAGR, vol   │
-  │  Balance Sheet Agent  → Leverage, risk level     │
-  │  Liquidity Agent      → Current ratio, WC trend  │
-  │  Sentiment Agent      → News sentiment (NewsAPI) │
-  │  Cross-Reference Agent→ Integrated LLM narrative │
-  └─────────────────────────────────────────────────┘
-        │
-        ▼
-  Explainable Output (Dashboard + JSON)
-```
+
+**Green = deterministic (Python).  Purple = AI (explains only).** The **Fact Ledger** is
+the contract between them: once the engines compute it, the numbers are frozen and the AI
+can only read them.
+
+For the full file tree and execution order, see **[STRUCTURE.md](STRUCTURE.md)**.
+For how the system evolved (V1 → V2 → V3), see **[VERSION_HISTORY.md](VERSION_HISTORY.md)**.
 
 ---
 
-## Key Features
+## What it produces
 
-| Feature | Details |
-|---------|---------|
-| **3 data sources** | Bloomberg PDF, Yahoo Finance ticker, Private Company CSV/Excel |
-| **Data credibility scoring** | 0-100 score with PASS/WARN/FAIL checks per field |
-| **Smart readiness alert** | Detects missing fields; lets you proceed or supplement before running |
-| **Auto-fill missing data** | FMP and Alpha Vantage APIs fill gaps when ticker data is incomplete |
-| **5 specialized agents** | Revenue, Balance Sheet, Liquidity, Sentiment, Cross-Reference |
-| **Secure Authentication** | Built-in MongoDB User Authentication, JWT tokens, and 15-minute session timeouts |
-| **LLM-agnostic** | Any OpenAI-compatible endpoint — LM Studio, Ollama, GPT-4, Claude via OpenRouter |
-| **Dark / Light mode** | Full theme toggle with amber accent palette |
-| **Font scaling** | 0.8× → 1.4× slider scales all UI text uniformly |
-| **Agent Transparency** | Live execution logs and guardrail constraints shown natively in the UI |
-| **Basel III context** | Pillar 2 / 3 alignment page for regulatory narrative |
-| **CLI mode** | Run the OCR pipeline headlessly without the UI |
+- **Verdict banner** — one line: grade, risk, min DSCR, biggest watch item.
+- **Credit scorecard** — an industry-aware grade (AA…D) + approximate default-probability
+  band, with a transparent factor breakdown (repayment, leverage, liquidity, profitability,
+  stability).
+- **Debt serviceability** — real DSCR with a selectable cash basis (EBITDA / EBIT / OCF /
+  **CFADS**), a full year-by-year amortization schedule, **minimum DSCR**, and **stress
+  tests** (revenue haircuts, rate shocks).
+- **Metrics** — profitability, solvency, liquidity, working-capital cycle (DSO/DIO/DPO/CCC),
+  each with a plain-English "what this means".
+- **Trends & forecast** — history plus a 3-year projection (base / optimistic / pessimistic).
+- **Peer benchmarking** — real peer data fetched from yfinance (never LLM-estimated).
+- **Anomaly alerts** — large swings, sign flips, balance-sheet-that-doesn't-tie, impossible values.
+- **AI assistant** — "explain these results" + a scoped "ask about this company" chat,
+  grounded strictly in the computed facts.
+- **Credit Memo** — a one-page lender memo, downloadable and printable to PDF.
 
 ---
 
-## Tech Stack
+## Key features
 
-| Layer | Technology |
-|-------|-----------|
-| Dashboard | Streamlit ≥ 1.34 |
-| PDF Extraction | pdfplumber |
-| Ticker Data | yfinance |
-| Supplemental APIs | Financial Modeling Prep (FMP), Alpha Vantage |
-| Data Processing | pandas, numpy |
-| LLM Integration | LangChain (`langchain-openai`) |
-| Pipeline Graph | streamlit-agraph, graphviz |
-| News Sentiment | NewsAPI (free tier) |
-| Font | JetBrains Mono, Material Symbols Outlined |
+| Area | Details |
+|------|---------|
+| **3 data sources** | Bloomberg PDF, Yahoo Finance ticker, private CSV/Excel |
+| **Deterministic engine** | All metrics + grade + DSCR computed in Python; immutable Fact Ledger |
+| **Industry-aware** | SaaS / financial / manufacturing / retail / general scoring profiles |
+| **Currency-correct** | FX-normalizable; INR shows in lakh/crore, others in K/M/B/T; reported-unit rescaling |
+| **Guardrailed AI** | Any OpenAI-compatible endpoint (Groq, LM Studio, Ollama, OpenAI); explains, never calculates |
+| **Auth** | MongoDB users, bcrypt, JWT sessions, email OTP |
+| **Tested** | 153 pytest tests |
 
 ---
 
 ## Setup
 
-### 1. Clone the repo and navigate to the app
-
 ```sh
 git clone https://github.com/rocko131205/PBL-2.git
 cd PBL-2/mayankPbl/ocr
-```
-
-### 2. Create a virtual environment
-
-```sh
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-```
-
-### 3. Install dependencies
-
-```sh
+python3 -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+streamlit run app.py                                    # open http://localhost:8501
 ```
 
-### 4. Run the dashboard
-
-```sh
-streamlit run app.py
-```
-
-Open `http://localhost:8501` in your browser.
-
----
-
-## Data Sources
-
-### Bloomberg PDF
-Upload one or both of:
-- **Income Statement PDF** — enables the Revenue Agent
-- **Balance Sheet PDF** — enables the Balance Sheet and Liquidity Agents
-
-Both together unlock all five agents including the Cross-Reference Agent.
-
-### Listed Ticker (Yahoo Finance)
-Enter any Yahoo Finance ticker (e.g. `INFY.NS`, `TCS.NS`, `AAPL`). Financial statements are fetched automatically. If fields are missing, supplemental APIs (FMP / Alpha Vantage) can fill the gaps.
-
-### Private Company CSV / Excel
-Upload a file with columns:
-
-| Column | Description |
-|--------|-------------|
-| `period` | Reporting period, e.g. `2023-FY` or `2022-Q3` |
-| `revenue` | Total revenue |
-| `total_assets` | Total assets |
-| `total_liabilities` | Total liabilities |
-| `current_assets` | Current assets |
-| `current_liabilities` | Current liabilities |
-| `equity` | Shareholders' equity |
-
-A downloadable template is available inside the app.
-
----
-
-## Sidebar Configuration
-
-All settings are configurable at runtime from the sidebar — no `.env` file needed.
-
-| Setting | Default | Notes |
-|---------|---------|-------|
-| **LLM Base URL** | `http://127.0.0.1:1234/v1` | LM Studio local endpoint |
-| **Model** | `qwen2.5-coder-1.5b-instruct-mlx` | Any OpenAI-compatible model name |
-
-### Required Environment Variables (`.env`)
-The system now enforces restricted access. Instead of dumping API keys in the sidebar, FinVeritas now requires a `.env` file in the root `ocr/` directory:
+### Environment variables (`.env` in `mayankPbl/ocr/`)
 
 ```env
-# SECURITY
-JWT_SECRET=your_super_secret_key
-MONGO_URI=mongodb+srv://admin:...
+# Security
+JWT_SECRET=your_secret
+MONGO_URI=mongodb+srv://...
 
-# COMMUNICATIONS (OTP)
+# Email OTP
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
+SMTP_USER=you@gmail.com
 SMTP_PASS=your_app_password
 
-# AGENT APIS
-NEWSAPI_KEY=your_news_key
-FMP_API_KEY=your_fmp_key
-LLM_API_KEY=local
-LLM_BASE_URL=http://127.0.0.1:1234/v1   # any OpenAI-compatible endpoint (LM Studio, Groq, Ollama, OpenAI…)
-LLM_MODEL=qwen2.5-coder-1.5b-instruct-mlx
+# LLM (any OpenAI-compatible endpoint)
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+LLM_API_KEY=your_key
+
+# Optional supplemental data
+NEWSAPI_KEY=...
+FMP_API_KEY=...
 ```
 
-> The Sentiment Agent is gracefully skipped if `NEWSAPI_KEY` is completely missing.
+The app runs without the LLM — only the narrative/AI-assistant needs the endpoint; all
+numbers work regardless.
 
 ---
 
-## Authentication & Security System 🔐
+## Data sources
 
-FinVeritas employs a strict, enterprise-grade authentication loop to protect financial pipelines:
-
-1. **MongoDB Integration:** All registered users are isolated inside our cloud MongoDB schema.
-2. **Email OTP Verification:** Registration features an authenticated SMTP gateway to send secure 6-digit One Time Passwords (OTPs).
-3. **JWT Session State:** Logins generate a signed JSON Web Token (JWT) that manages the user's active session.
-4. **Auto-timeout:** For security, the system actively tracks mouse movements. 15 minutes of inactivity immediately destroys the JWT and securely re-routes the user back to the login wall.
-5. **Route Guarding:** Absolute path navigation is blocked; you cannot visit `/analysis` without explicitly completing the `/upload` OCR workflow first.
-
----
-
-## Data Credibility Engine
-
-Every data load is automatically scored 0–100 before analysis runs. The score is a weighted average of individual checks:
-
-| Check | Source Types | What It Tests |
-|-------|-------------|---------------|
-| Source authenticity | All | Bloomberg PDF > ticker > CSV in trust weighting |
-| Account identity | Bloomberg PDF | Company name extracted and verified from the document |
-| Period coverage | All | Minimum 4 aligned fiscal periods required |
-| Required field presence | All | All core fields (revenue, assets, liabilities, equity) must exist |
-| Data consistency | All | No negative assets; periods in chronological order |
-| Cross-source agreement | Ticker | FMP and AV values cross-checked against yfinance |
-
-The result is shown as a **HIGH / MEDIUM / LOW** confidence card with an expandable per-check breakdown before you run any agents.
+- **Bloomberg PDF** — upload the income statement and/or balance sheet PDFs; the OCR chain
+  extracts them. If the statement is reported "in millions/lakhs/crore", pick that unit on
+  the Upload page so magnitudes are correct.
+- **Ticker (Yahoo Finance)** — e.g. `INFY.NS`, `TCS.NS`, `AAPL`. Pulls income statement,
+  balance sheet, and cash-flow statement automatically.
+- **Private CSV/Excel** — columns: `period, revenue, total_assets, total_liabilities,
+  current_assets, current_liabilities, equity`. A template is available in the app.
 
 ---
 
-## Agent Details
-
-### Revenue Agent
-Computes: YoY growth rates, 3-year CAGR, revenue volatility (standard deviation of growth), trend direction.  
-LLM receives: metric dictionary only, at `temperature=0`.
-
-### Balance Sheet Agent
-Computes: debt-to-equity ratio, leverage ratio, asset growth rate, equity growth rate, risk classification (LOW / MEDIUM / HIGH).  
-Validation: no negative balance-sheet values; minimum 4 periods.
-
-### Liquidity Agent
-Computes: current ratio, working capital, working capital trend, liquidity risk flag.  
-Compliance retry: if the LLM uses forbidden terms (e.g. "cash flow", "margin"), it retries once with a correction prompt.
-
-### Sentiment Agent *(optional)*
-Fetches headlines from NewsAPI for the company entity.  
-Scoring: keyword-based matching against ~50 positive and ~50 negative financial terms — no ML model involved.  
-Gracefully skipped if no API key is provided.
-
-### Cross-Reference Agent
-Receives all pre-computed metric dicts from the four agents above.  
-Generates a single integrated narrative summary cross-referencing revenue, balance sheet, liquidity, and sentiment signals.
-
----
-
-## Dashboard Pages
-
-| Page | What's on it |
-|------|-------------|
-| **Upload Statement** | Data source tabs, credibility score card, smart readiness alert, Run Analysis button |
-| **Agent Workflow** | Interactive pipeline diagram layered above the Agent Transparency & Guardrails panel |
-| **Financial Analysis** | Full metrics + LLM narrative per agent, nicely formatted raw JSON audit trail |
-| **Basel III Alignment** | Pillar 2/3 regulatory context; maps system outputs to supervisory expectations |
-
----
-
-## Smart Readiness Alert
-
-Before running analysis, the system checks which fields are populated and which agents can execute. It shows one of two paths:
-
-- **Proceed Anyway** — skips agents with missing required fields, runs the rest
-- **Fix Missing Data** — opens a supplement form with auto-fetch (FMP/AV) and manual entry options
-
-Manual supplement is only prompted when automated extraction is incomplete — it never appears when all data is available.
-
----
-
-## Output JSON Schema
-
-Each processed company produces a structured JSON file in `output/`:
-
-```json
-{
-  "entity": {
-    "entity_id": "Infosys Ltd",
-    "source": "bloomberg_pdf",
-    "currency": "INR",
-    "source_files": ["infosys_is.pdf", "infosys_bs.pdf"]
-  },
-  "time_series": {
-    "revenue":             [{"period": "2022-FY", "value": 121641}, ...],
-    "total_assets":        [{"period": "2022-FY", "value": 89400},  ...],
-    "total_liabilities":   [...],
-    "current_assets":      [...],
-    "current_liabilities": [...],
-    "equity":              [...]
-  }
-}
-```
-
-Period format is always `YYYY-FY` (annual) or `YYYY-QN` (quarterly). The parser normalises all Bloomberg header variants automatically.
-
----
-
-## Project Structure
-
-All source lives under one package, `finveritas/`, grouped by the user journey
-(auth → ingestion → analysis → shared). See **[STRUCTURE.md](STRUCTURE.md)** for the
-full tree and execution flow, and **[VERSION_HISTORY.md](VERSION_HISTORY.md)** for how
-the architecture evolved (V1 → V2 → V3).
-
----
-
-## CLI Mode (No UI)
-
-Run the OCR extraction pipeline without starting the Streamlit server:
+## CLI (headless PDF → JSON)
 
 ```sh
-# Default: reads from input_pdfs/, writes to output/
-python3 -m finveritas.ingestion.pdf.cli
-
-# Custom paths
-python3 -m finveritas.ingestion.pdf.cli --input path/to/pdfs --output path/to/output
-
-# Verbose logging
-python3 -m finveritas.ingestion.pdf.cli --verbose
+python3 -m finveritas.ingestion.pdf.cli                                   # input_pdfs/ → output/
+python3 -m finveritas.ingestion.pdf.cli --input path/to/pdfs --output out
 ```
 
 ---
 
-## Basel III Note
+## Testing
 
-FinVeritas is **not** a regulatory reporting tool. It does not compute capital adequacy ratios, Tier 1/2 capital buffers, LCR, NSFR, or any binding Basel III compliance measures. It is designed for:
-
-- Structured financial statement review and audit trails
-- Preliminary credit background checks from public filings
-- Risk trend monitoring across reporting periods
-- Generation of explainable, auditable financial summaries
+```sh
+pytest            # 153 tests
+```
 
 ---
 
-## Branch Info
+## Disclaimer
 
-| Branch | Purpose |
-|--------|---------|
-| `V2-final` | **CURRENT BRANCH:** V2 deterministic architecture (Fact Ledger + LangGraph), auth loop, and repo cleanup |
-| `v2-review2` | V2 review checkpoint |
-| `avi` | UI Revamp — FinVeritas rebranding, theme system, credibility engine |
-| `ASSHUL` | Base feature integration |
-| `final` | Earlier polished-UI checkpoint |
+FinVeritas is **decision support for a qualified analyst** — not a loan approval, rejection,
+or binding credit decision. It does not compute regulatory capital measures (Basel III LCR,
+NSFR, Tier 1/2). All data is from public filings / Yahoo Finance for educational use.
 
----
-
-## License
-
-This project was developed as part of a Problem-Based Learning (PBL) academic project. All financial data shown is sourced from public filings or Yahoo Finance and is used for educational purposes only.
+Built as a Problem-Based Learning (PBL) academic project.
