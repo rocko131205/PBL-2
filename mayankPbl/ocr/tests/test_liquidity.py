@@ -1,6 +1,6 @@
 """V3 — V2 liquidity engine tests."""
-from src.schema import NormalizedCompanyRecord, FinancialPeriod
-from src.liquidity_metrics import compute_liquidity_metrics
+from shared.schema import NormalizedCompanyRecord, FinancialPeriod
+from analysis.engines.liquidity_metrics import compute_liquidity_metrics
 
 
 def _rec(**latest):

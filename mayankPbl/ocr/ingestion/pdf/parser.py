@@ -16,8 +16,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .extractor import PDFContent
-from .mapper import detect_statement_type, resolve_field
+from ingestion.pdf.extractor import PDFContent
+from ingestion.pdf.mapper import detect_statement_type, resolve_field
 
 logger = logging.getLogger(__name__)
 

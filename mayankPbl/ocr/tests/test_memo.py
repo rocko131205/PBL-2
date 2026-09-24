@@ -1,9 +1,9 @@
 """V3 Phase 4 — credit memo tests."""
 from __future__ import annotations
 
-from src.schema import NormalizedCompanyRecord, FinancialPeriod
-from src.credit_scorecard import compute_scorecard
-from src.credit_memo import build_memo, render_memo_html
+from shared.schema import NormalizedCompanyRecord, FinancialPeriod
+from analysis.engines.credit_scorecard import compute_scorecard
+from analysis.engines.credit_memo import build_memo, render_memo_html
 
 
 def _rec(**latest):

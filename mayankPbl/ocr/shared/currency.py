@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
-from .schema import FinancialPeriod, NormalizedCompanyRecord
+from shared.schema import FinancialPeriod, NormalizedCompanyRecord
 
 # Approximate USD value of 1 unit of each currency. Fallback only — clearly
 # labelled as approximate wherever surfaced. Live rates override these.

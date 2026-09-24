@@ -13,7 +13,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from .parser import ParsedStatement
+from ingestion.pdf.parser import ParsedStatement
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,7 @@ import re
 import streamlit as st
 import pandas as pd
 
-from src.formatting import format_money
+from shared.formatting import format_money
 
 
 # ─────────────────────────────────────────────────────────────────────────────

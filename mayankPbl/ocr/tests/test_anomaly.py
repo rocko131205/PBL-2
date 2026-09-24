@@ -1,8 +1,8 @@
 """V3 Phase 8 — anomaly engine tests."""
 from __future__ import annotations
 
-from src.schema import NormalizedCompanyRecord, FinancialPeriod
-from src.anomaly_engine import detect_anomalies
+from shared.schema import NormalizedCompanyRecord, FinancialPeriod
+from analysis.engines.anomaly_engine import detect_anomalies
 
 
 def _rec(**series):

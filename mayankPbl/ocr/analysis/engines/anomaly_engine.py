@@ -13,8 +13,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from .formatting import format_money, format_percent
-from .schema import NormalizedCompanyRecord
+from shared.formatting import format_money, format_percent
+from shared.schema import NormalizedCompanyRecord
 
 
 class Anomaly(BaseModel):

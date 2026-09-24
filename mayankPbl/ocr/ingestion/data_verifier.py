@@ -9,7 +9,7 @@ Sources supported:
   - "csv"            : accounting identity + internal consistency + plausibility
 
 Usage:
-    from src.data_verifier import run_verification
+    from ingestion.data_verifier import run_verification
     report = run_verification(source="ticker", payload=payload,
                               ticker="INFY.NS", fmp_api_key="...")
 """
@@ -297,7 +297,7 @@ def _check_ticker_dual_source(
 ) -> CredibilityCheck:
     """Cross-check yfinance revenue figures against FMP."""
     try:
-        from src.supplemental_fetchers import fetch_missing_from_fmp
+        from ingestion.supplemental_fetchers import fetch_missing_from_fmp
         fmp_data = fetch_missing_from_fmp(ticker, fmp_api_key, limit=5)
     except Exception as exc:
         return CredibilityCheck("Dual-Source Cross-Check", STATUS_SKIP,

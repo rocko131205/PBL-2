@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
-from .schema import NormalizedCompanyRecord
+from shared.schema import NormalizedCompanyRecord
 
 
 # -------------------------------------------------------------------------

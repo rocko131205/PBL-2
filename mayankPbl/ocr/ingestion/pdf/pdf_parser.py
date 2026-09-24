@@ -18,9 +18,9 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from src.builder import build_company_json
-from src.extractor import extract_pdf
-from src.parser import parse_statement
+from ingestion.pdf.builder import build_company_json
+from ingestion.pdf.extractor import extract_pdf
+from ingestion.pdf.parser import parse_statement
 
 # ---------------------------------------------------------------------------
 # Field sets that define what each agent needs

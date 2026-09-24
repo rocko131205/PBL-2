@@ -15,12 +15,12 @@ import json
 import unittest
 from typing import Any, Dict
 
-from src.dscr_engine import compute_dscr, dscr_to_fact_entry
-from src.payload_mapper import payload_to_normalized_record
-from src.profitability_calculator import compute_profitability_metrics
-from src.risk_indicator_engine import build_risk_dashboard
-from src.saas_engine import compute_saas_metrics
-from src.schema import (
+from analysis.engines.dscr_engine import compute_dscr, dscr_to_fact_entry
+from ingestion.payload_mapper import payload_to_normalized_record
+from analysis.engines.profitability_calculator import compute_profitability_metrics
+from analysis.engines.risk_indicator_engine import build_risk_dashboard
+from analysis.engines.saas_engine import compute_saas_metrics
+from shared.schema import (
     CreditAssessmentReport,
     DSCRInputs,
     DSCRResult,
@@ -31,7 +31,7 @@ from src.schema import (
     RiskDashboard,
     RiskLevel,
 )
-from src.solvency_calculator import compute_solvency_metrics
+from analysis.engines.solvency_calculator import compute_solvency_metrics
 
 
 # ── Synthetic Payloads ────────────────────────────────────────────────────────

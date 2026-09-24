@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
-from .schema import NormalizedCompanyRecord
+from shared.schema import NormalizedCompanyRecord
 
 
 class ForecastPoint(BaseModel):

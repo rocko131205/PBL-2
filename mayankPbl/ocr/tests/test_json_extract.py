@@ -1,5 +1,5 @@
 """V3 — robust LLM JSON extractor tests."""
-from src.agent_workflow import _extract_json
+from analysis.agents.agent_workflow import _extract_json
 
 
 def test_direct_object():

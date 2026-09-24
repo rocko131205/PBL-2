@@ -30,7 +30,7 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List, Optional
 
-from .schema import (
+from shared.schema import (
     CheckStatus,
     DSCRInputs,
     DSCRMethodology,

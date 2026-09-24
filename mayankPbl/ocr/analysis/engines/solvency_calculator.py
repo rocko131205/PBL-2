@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from .schema import (
+from shared.schema import (
     CheckStatus,
     FactLedgerEntry,
     FactStatus,

@@ -36,12 +36,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
-from .dscr_engine import compute_dscr, dscr_to_fact_entry
-from .payload_mapper import payload_to_normalized_record
-from .profitability_calculator import compute_profitability_metrics
-from .risk_indicator_engine import build_risk_dashboard
-from .saas_engine import compute_saas_metrics
-from .schema import (
+from analysis.engines.dscr_engine import compute_dscr, dscr_to_fact_entry
+from ingestion.payload_mapper import payload_to_normalized_record
+from analysis.engines.profitability_calculator import compute_profitability_metrics
+from analysis.engines.risk_indicator_engine import build_risk_dashboard
+from analysis.engines.saas_engine import compute_saas_metrics
+from shared.schema import (
     CreditAssessmentReport,
     DSCRInputs,
     DSCRResult,
@@ -53,9 +53,9 @@ from .schema import (
     RiskDashboard,
     RiskLevel,
 )
-from .solvency_calculator import compute_solvency_metrics
-from .liquidity_metrics import compute_liquidity_metrics
-from .working_capital import compute_working_capital_cycle
+from analysis.engines.solvency_calculator import compute_solvency_metrics
+from analysis.engines.liquidity_metrics import compute_liquidity_metrics
+from analysis.engines.working_capital import compute_working_capital_cycle
 
 
 # -------------------------------------------------------------------------
@@ -449,7 +449,7 @@ def peer_analysis_node(state: WorkflowState) -> WorkflowState:
         if peer_tickers:
             _log(state, f"Peer Analysis Agent: LLM identified {len(peer_tickers)} valid peers, fetching actual data...")
             try:
-                from .yfinance_ingestion import fetch_by_ticker
+                from ingestion.yfinance_ingestion import fetch_by_ticker
             except ImportError:
                 _log(state, "Peer Analysis Agent: yfinance not available")
                 peer_tickers = []

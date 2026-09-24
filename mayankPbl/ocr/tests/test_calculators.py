@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.schema import (
+from shared.schema import (
     CheckStatus,
     DSCRInputs,
     DSCRResult,
@@ -55,7 +55,7 @@ def _find_entry(entries: list[FactLedgerEntry], metric: str) -> FactLedgerEntry 
 
 class TestProfitabilityCalculator:
     def test_gross_margin_calculated(self):
-        from src.profitability_calculator import compute_profitability_metrics
+        from analysis.engines.profitability_calculator import compute_profitability_metrics
 
         record = _make_record(
             revenue=[_fp("2023-FY", 1000)],
@@ -69,7 +69,7 @@ class TestProfitabilityCalculator:
         assert gm.unit == "%"
 
     def test_gross_margin_insufficient_data(self):
-        from src.profitability_calculator import compute_profitability_metrics
+        from analysis.engines.profitability_calculator import compute_profitability_metrics
 
         record = _make_record(
             revenue=[_fp("2023-FY", 1000)],
@@ -82,7 +82,7 @@ class TestProfitabilityCalculator:
         assert gm.status == FactStatus.INSUFFICIENT_DATA
 
     def test_operating_margin(self):
-        from src.profitability_calculator import compute_profitability_metrics
+        from analysis.engines.profitability_calculator import compute_profitability_metrics
 
         record = _make_record(
             revenue=[_fp("2023-FY", 1000)],
@@ -94,7 +94,7 @@ class TestProfitabilityCalculator:
         assert om.value == 20.0
 
     def test_negative_operating_margin_flagged(self):
-        from src.profitability_calculator import compute_profitability_metrics
+        from analysis.engines.profitability_calculator import compute_profitability_metrics
 
         record = _make_record(
             revenue=[_fp("2023-FY", 1000)],
@@ -107,7 +107,7 @@ class TestProfitabilityCalculator:
         assert om.risk_signal == CheckStatus.FAIL
 
     def test_roe_calculation(self):
-        from src.profitability_calculator import compute_profitability_metrics
+        from analysis.engines.profitability_calculator import compute_profitability_metrics
 
         record = _make_record(
             net_income=[_fp("2023-FY", 150)],
@@ -119,7 +119,7 @@ class TestProfitabilityCalculator:
         assert roe.value == 30.0
 
     def test_roa_calculation(self):
-        from src.profitability_calculator import compute_profitability_metrics
+        from analysis.engines.profitability_calculator import compute_profitability_metrics
 
         record = _make_record(
             net_income=[_fp("2023-FY", 100)],
@@ -131,7 +131,7 @@ class TestProfitabilityCalculator:
         assert roa.value == 5.0
 
     def test_roce_calculation(self):
-        from src.profitability_calculator import compute_profitability_metrics
+        from analysis.engines.profitability_calculator import compute_profitability_metrics
 
         record = _make_record(
             operating_income=[_fp("2023-FY", 300)],
@@ -151,7 +151,7 @@ class TestProfitabilityCalculator:
 
 class TestSolvencyCalculator:
     def test_debt_to_equity(self):
-        from src.solvency_calculator import compute_solvency_metrics
+        from analysis.engines.solvency_calculator import compute_solvency_metrics
 
         record = _make_record(
             total_debt=[_fp("2023-FY", 600)],
@@ -164,7 +164,7 @@ class TestSolvencyCalculator:
         assert d2e.risk_signal == CheckStatus.PASS
 
     def test_high_leverage_flagged(self):
-        from src.solvency_calculator import compute_solvency_metrics
+        from analysis.engines.solvency_calculator import compute_solvency_metrics
 
         record = _make_record(
             total_liabilities=[_fp("2023-FY", 3500)],
@@ -177,7 +177,7 @@ class TestSolvencyCalculator:
         assert d2e.risk_signal == CheckStatus.FAIL
 
     def test_interest_coverage_strong(self):
-        from src.solvency_calculator import compute_solvency_metrics
+        from analysis.engines.solvency_calculator import compute_solvency_metrics
 
         record = _make_record(
             operating_income=[_fp("2023-FY", 500)],
@@ -190,7 +190,7 @@ class TestSolvencyCalculator:
         assert icr.risk_signal == CheckStatus.PASS
 
     def test_interest_coverage_weak(self):
-        from src.solvency_calculator import compute_solvency_metrics
+        from analysis.engines.solvency_calculator import compute_solvency_metrics
 
         record = _make_record(
             operating_income=[_fp("2023-FY", 80)],
@@ -203,7 +203,7 @@ class TestSolvencyCalculator:
         assert icr.risk_signal == CheckStatus.FAIL
 
     def test_net_debt_calculation(self):
-        from src.solvency_calculator import compute_solvency_metrics
+        from analysis.engines.solvency_calculator import compute_solvency_metrics
 
         record = _make_record(
             total_debt=[_fp("2023-FY", 1000)],
@@ -216,7 +216,7 @@ class TestSolvencyCalculator:
         assert nd.value == 700.0
 
     def test_net_cash_position(self):
-        from src.solvency_calculator import compute_solvency_metrics
+        from analysis.engines.solvency_calculator import compute_solvency_metrics
 
         record = _make_record(
             total_debt=[_fp("2023-FY", 200)],
@@ -236,7 +236,7 @@ class TestSolvencyCalculator:
 class TestDSCREngine:
     def test_dscr_with_ebitda(self):
         """DSCR should use EBITDA when available."""
-        from src.dscr_engine import compute_dscr
+        from analysis.engines.dscr_engine import compute_dscr
 
         record = _make_record(
             ebitda=[_fp("2023-FY", 500)],
@@ -255,7 +255,7 @@ class TestDSCREngine:
 
     def test_dscr_falls_back_to_operating_income(self):
         """When EBITDA is unavailable, use Operating Income."""
-        from src.dscr_engine import compute_dscr
+        from analysis.engines.dscr_engine import compute_dscr
 
         record = _make_record(
             operating_income=[_fp("2023-FY", 300)],
@@ -274,7 +274,7 @@ class TestDSCREngine:
 
     def test_dscr_never_uses_revenue_proxy(self):
         """CRITICAL: DSCR must NEVER use revenue * 0.20 or any revenue proxy."""
-        from src.dscr_engine import compute_dscr
+        from analysis.engines.dscr_engine import compute_dscr
 
         record = _make_record(
             revenue=[_fp("2023-FY", 2000)],
@@ -293,7 +293,7 @@ class TestDSCREngine:
 
     def test_dscr_insufficient_data_clearly_stated(self):
         """When data is missing, DSCR should explicitly state what's needed."""
-        from src.dscr_engine import compute_dscr
+        from analysis.engines.dscr_engine import compute_dscr
 
         record = _make_record(
             revenue=[_fp("2023-FY", 2000)],
@@ -305,7 +305,7 @@ class TestDSCREngine:
 
     def test_dscr_no_debt_service(self):
         """When no debt service is provided, explain what's needed."""
-        from src.dscr_engine import compute_dscr
+        from analysis.engines.dscr_engine import compute_dscr
 
         record = _make_record(
             ebitda=[_fp("2023-FY", 500)],
@@ -317,7 +317,7 @@ class TestDSCREngine:
 
     def test_dscr_calculated_from_loan_terms(self):
         """DSCR should calculate debt service from loan amount + rate + tenure."""
-        from src.dscr_engine import compute_dscr
+        from analysis.engines.dscr_engine import compute_dscr
 
         record = _make_record(
             ebitda=[_fp("2023-FY", 500)],
@@ -334,7 +334,7 @@ class TestDSCREngine:
 
     def test_dscr_methodology_documented(self):
         """Every DSCR result must include full methodology documentation."""
-        from src.dscr_engine import compute_dscr
+        from analysis.engines.dscr_engine import compute_dscr
 
         record = _make_record(
             ebitda=[_fp("2023-FY", 500)],
@@ -351,7 +351,7 @@ class TestDSCREngine:
 
     def test_dscr_critical_risk_below_1(self):
         """DSCR below 1.0 must be classified as CRITICAL risk."""
-        from src.dscr_engine import compute_dscr
+        from analysis.engines.dscr_engine import compute_dscr
 
         record = _make_record(
             ebitda=[_fp("2023-FY", 100)],
@@ -368,7 +368,7 @@ class TestDSCREngine:
 
     def test_dscr_reconstructed_from_components(self):
         """DSCR should reconstruct NOI from net_income + interest + dep + tax."""
-        from src.dscr_engine import compute_dscr
+        from analysis.engines.dscr_engine import compute_dscr
 
         record = _make_record(
             net_income=[_fp("2023-FY", 200)],
@@ -396,7 +396,7 @@ class TestDSCREngine:
 class TestSaaSEngine:
     def test_rule_of_40_uses_actual_data(self):
         """Rule of 40 must use ACTUAL growth + margin, never hardcoded 10%."""
-        from src.saas_engine import compute_saas_metrics
+        from analysis.engines.saas_engine import compute_saas_metrics
 
         record = _make_record(
             revenue=[_fp("2022-FY", 800), _fp("2023-FY", 1000)],
@@ -413,7 +413,7 @@ class TestSaaSEngine:
 
     def test_rule_of_40_never_uses_hardcoded_margin(self):
         """Rule of 40 must NOT use profit_margin = 10.0 (the old V1 bug)."""
-        from src.saas_engine import compute_saas_metrics
+        from analysis.engines.saas_engine import compute_saas_metrics
 
         record = _make_record(
             revenue=[_fp("2022-FY", 800), _fp("2023-FY", 1000)],
@@ -429,7 +429,7 @@ class TestSaaSEngine:
             assert r40.value != 35.0
 
     def test_gross_margin_for_saas(self):
-        from src.saas_engine import compute_saas_metrics
+        from analysis.engines.saas_engine import compute_saas_metrics
 
         record = _make_record(
             revenue=[_fp("2023-FY", 1000)],
@@ -442,7 +442,7 @@ class TestSaaSEngine:
         assert gm.risk_signal == CheckStatus.PASS
 
     def test_low_gross_margin_flagged(self):
-        from src.saas_engine import compute_saas_metrics
+        from analysis.engines.saas_engine import compute_saas_metrics
 
         record = _make_record(
             revenue=[_fp("2023-FY", 1000)],
@@ -461,7 +461,7 @@ class TestSaaSEngine:
 
 class TestRiskIndicatorEngine:
     def test_risk_dashboard_collects_signals(self):
-        from src.risk_indicator_engine import build_risk_dashboard
+        from analysis.engines.risk_indicator_engine import build_risk_dashboard
 
         record = _make_record(
             revenue=[_fp("2022-FY", 1000), _fp("2023-FY", 900)],
@@ -487,7 +487,7 @@ class TestRiskIndicatorEngine:
         assert dashboard.fail_count > 0
 
     def test_healthy_company_low_risk(self):
-        from src.risk_indicator_engine import build_risk_dashboard
+        from analysis.engines.risk_indicator_engine import build_risk_dashboard
 
         record = _make_record(
             revenue=[_fp("2022-FY", 800), _fp("2023-FY", 1000)],

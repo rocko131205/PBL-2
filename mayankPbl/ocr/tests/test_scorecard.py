@@ -1,8 +1,8 @@
 """V3 Phase 3 — credit scorecard tests."""
 from __future__ import annotations
 
-from src.schema import NormalizedCompanyRecord, FinancialPeriod
-from src.credit_scorecard import compute_scorecard, resolve_profile, _interp
+from shared.schema import NormalizedCompanyRecord, FinancialPeriod
+from analysis.engines.credit_scorecard import compute_scorecard, resolve_profile, _interp
 
 
 def _rec(industry_series=None, **latest):

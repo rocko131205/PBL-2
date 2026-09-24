@@ -13,8 +13,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from .formatting import format_money, format_percent, format_ratio
-from .schema import NormalizedCompanyRecord
+from shared.formatting import format_money, format_percent, format_ratio
+from shared.schema import NormalizedCompanyRecord
 
 
 class CreditMemo(BaseModel):

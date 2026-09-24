@@ -1,5 +1,5 @@
 """V3 — reporting-scale detection & rescale tests."""
-from src.scale_detection import detect_scale, rescale_payload, SCALE_MULTIPLIERS
+from ingestion.scale_detection import detect_scale, rescale_payload, SCALE_MULTIPLIERS
 
 
 class TestDetect:

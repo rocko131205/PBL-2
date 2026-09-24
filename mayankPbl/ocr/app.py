@@ -17,24 +17,24 @@ import pandas as pd
 import streamlit as st
 from streamlit_agraph import Config, Edge, Node, agraph
 
-from src.agent_workflow import run_analysis
-from src.payload_mapper import payload_to_normalized_record
-from src.schema import DSCRInputs, NormalizedCompanyRecord
-from src.debt_service import LoanTerms, compute_dscr_schedule
-from src.credit_scorecard import compute_scorecard
-from src.credit_memo import build_memo, render_memo_html
-from src.forecast import forecast_field
-from src.ai_assistant import explain_results, answer_question
-from src.anomaly_engine import detect_anomalies
-from src.metric_meanings import meaning_for
-from src.scale_detection import rescale_payload
-from src.formatting import format_money, format_ratio, format_percent
-from ocr.pdf_parser import parse_pdf_to_json, payload_to_agent_files
-from src.yfinance_ingestion import fetch_by_ticker
-from src.private_company_ingestion import load_private_company_data, get_template_csv
-from src.supplemental_fetchers import auto_fetch_missing_fields
-from src.data_verifier import run_verification, CredibilityReport, STATUS_PASS, STATUS_WARN, STATUS_FAIL, STATUS_SKIP
-from ui.dashboard_components import (
+from analysis.agents.agent_workflow import run_analysis
+from ingestion.payload_mapper import payload_to_normalized_record
+from shared.schema import DSCRInputs, NormalizedCompanyRecord
+from analysis.engines.debt_service import LoanTerms, compute_dscr_schedule
+from analysis.engines.credit_scorecard import compute_scorecard
+from analysis.engines.credit_memo import build_memo, render_memo_html
+from analysis.engines.forecast import forecast_field
+from analysis.agents.ai_assistant import explain_results, answer_question
+from analysis.engines.anomaly_engine import detect_anomalies
+from shared.metric_meanings import meaning_for
+from ingestion.scale_detection import rescale_payload
+from shared.formatting import format_money, format_ratio, format_percent
+from ingestion.pdf.pdf_parser import parse_pdf_to_json, payload_to_agent_files
+from ingestion.yfinance_ingestion import fetch_by_ticker
+from ingestion.private_company_ingestion import load_private_company_data, get_template_csv
+from ingestion.supplemental_fetchers import auto_fetch_missing_fields
+from ingestion.data_verifier import run_verification, CredibilityReport, STATUS_PASS, STATUS_WARN, STATUS_FAIL, STATUS_SKIP
+from shared.components import (
     agent_tooltip_html,
     inject_theme_vars,
     load_css,
@@ -545,7 +545,7 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
                     # Fetch qualitative context
                     qualitative_text = ""
                     if fmp_api_key:
-                        from src.supplemental_fetchers import fetch_latest_earnings_call_transcript
+                        from ingestion.supplemental_fetchers import fetch_latest_earnings_call_transcript
                         try:
                             qualitative_text = fetch_latest_earnings_call_transcript(ticker, fmp_api_key)
                         except Exception as e:

@@ -1,8 +1,8 @@
 """V3 Phase 2 — advanced debt-service (DSCR schedule, amortization, stress) tests."""
 from __future__ import annotations
 
-from src.schema import NormalizedCompanyRecord, FinancialPeriod
-from src.debt_service import (
+from shared.schema import NormalizedCompanyRecord, FinancialPeriod
+from analysis.engines.debt_service import (
     LoanTerms,
     build_amortization_schedule,
     resolve_numerator,

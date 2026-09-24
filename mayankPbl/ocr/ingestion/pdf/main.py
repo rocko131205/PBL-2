@@ -17,9 +17,9 @@ import logging
 import sys
 from pathlib import Path
 
-from .builder import aggregate_and_write
-from .extractor import extract_pdf
-from .parser import ParsedStatement, parse_statement
+from ingestion.pdf.builder import aggregate_and_write
+from ingestion.pdf.extractor import extract_pdf
+from ingestion.pdf.parser import ParsedStatement, parse_statement
 
 logger = logging.getLogger("bloomberg_ocr")
 

@@ -5,7 +5,7 @@ and produces the V2 NormalizedCompanyRecord with provenance tracking.
 """
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
-from .schema import NormalizedCompanyRecord, FinancialPeriod
+from shared.schema import NormalizedCompanyRecord, FinancialPeriod
 
 
 # ── All fields that can be mapped from a time_series payload ──────────────

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from .schema import CheckStatus, FactLedgerEntry, FactStatus, NormalizedCompanyRecord
+from shared.schema import CheckStatus, FactLedgerEntry, FactStatus, NormalizedCompanyRecord
 
 
 def _entry(metric, name, value, formula, inputs, period, risk=None, detail=None) -> FactLedgerEntry:
