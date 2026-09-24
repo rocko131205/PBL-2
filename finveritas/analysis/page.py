@@ -2,8 +2,6 @@
 Rendered after an analysis has been run."""
 from __future__ import annotations
 
-from __future__ import annotations
-
 import traceback
 import html
 from typing import Any

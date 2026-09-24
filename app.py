@@ -4,8 +4,6 @@ Flow: login (auth/) -> upload (ingestion/upload_page) -> analysis (analysis/anal
 Page code lives in its feature package; this file wires auth, sidebar nav, and routing."""
 from __future__ import annotations
 
-from __future__ import annotations
-
 import traceback
 import html
 from typing import Any

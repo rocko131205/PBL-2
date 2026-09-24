@@ -2,8 +2,6 @@
 Runs after login. Fetches/parses data and kicks off the analysis workflow."""
 from __future__ import annotations
 
-from __future__ import annotations
-
 import traceback
 import html
 from typing import Any
