@@ -19,48 +19,12 @@ plain English. It can never invent or change a figure.
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    U(["User"]) --> AUTH["Auth: login / signup<br/>JWT, OTP, MongoDB"]
-    AUTH --> UP["Upload Page"]
+The **Fact Ledger** is the contract between the deterministic engines (which compute every
+number in Python) and the AI layer (which only narrates). See the full diagram and layer
+breakdown in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
-    UP --> SRC{"Data source?"}
-    SRC -->|"Bloomberg PDF"| PDF["PDF OCR chain<br/>extractor to parser to labels to builder"]
-    SRC -->|"Ticker"| TIC["ticker (yfinance)"]
-    SRC -->|"CSV / Excel"| CSV["spreadsheet"]
-    PDF --> NORM["normalize to NormalizedCompanyRecord"]
-    TIC --> NORM
-    CSV --> NORM
-    NORM --> SCALE["scale: reported units to absolute"]
-    SCALE --> CRED["credibility score 0-100"]
-    CRED --> WF["LangGraph Workflow"]
-
-    WF --> CI["Company Intelligence (LLM)"]
-    CI --> FC["Financial Computation"]
-    FC --> ENG["Metrics engines:<br/>profitability, solvency, liquidity,<br/>working capital, DSCR + stress,<br/>scorecard, anomaly, forecast"]
-    ENG --> LEDGER[("Fact Ledger<br/>immutable, deterministic")]
-    LEDGER --> PEER["Peer Analysis<br/>LLM picks tickers, real data fetched"]
-    PEER --> QUAL["Qualitative (LLM)"]
-    QUAL --> CA["Credit Assessment (LLM narrative)"]
-    CA --> OUT["Analysis Page:<br/>verdict, scorecard, DSCR, memo"]
-    LEDGER --> AI["AI Assistant<br/>explain / ask (guardrailed)"]
-
-    OUT --> U
-    AI --> U
-    AUTH -.-> DB[("MongoDB<br/>users, history")]
-
-    classDef llm fill:#2b1a4a,stroke:#a78bfa,color:#e9d5ff;
-    classDef det fill:#0d2818,stroke:#34d399,color:#bbf7d0;
-    class CI,PEER,QUAL,CA,AI llm;
-    class FC,ENG,LEDGER,SCALE,CRED det;
-```
-
-**Green = deterministic (Python).  Purple = AI (explains only).** The **Fact Ledger** is
-the contract between them: once the engines compute it, the numbers are frozen and the AI
-can only read them.
-
-For the full file tree and execution order, see **[STRUCTURE.md](STRUCTURE.md)**.
-For how the system evolved (V1 → V2 → V3), see **[VERSION_HISTORY.md](VERSION_HISTORY.md)**.
+For the file tree and execution order, see **[STRUCTURE.md](STRUCTURE.md)**; for how the
+system evolved (V1 → V2 → V3), see **[VERSION_HISTORY.md](VERSION_HISTORY.md)**.
 
 ---
 
