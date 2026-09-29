@@ -412,7 +412,7 @@ def render_top_bar(entity: str = "—", user_name: str | None = None) -> None:
 
     # Build profile section HTML (shown only when logged in)
     if user_name:
-        initials = "".join(w[0].upper() for w in user_name.strip().split()[:2])
+        initials = html.escape("".join(w[0].upper() for w in user_name.strip().split()[:2]))
         name_escaped = html.escape(user_name.strip())
         profile_html = (
             f'<div class="bb-profile-menu">'
@@ -757,12 +757,17 @@ def render_cross_ref_card(output: dict[str, Any]) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def agent_tooltip_html(name: str, output: dict[str, Any] | None) -> str:
-    """Build an HTML tooltip string for use as a vis.js node title."""
+    """Build an HTML tooltip string for use as a vis.js node title.
+
+    All dynamic values are escaped: errors, metric labels and LLM analysis text can
+    carry content from uploaded files.
+    """
+    name = html.escape(str(name))
     if not output:
         return f"<b>{name}</b><br><i>Not yet run</i>"
 
     if isinstance(output.get("error"), str):
-        err = output["error"][:120]
+        err = html.escape(output["error"][:120])
         return f"<b>{name}</b><br><span style='color:#FF7777'>⚠ {err}</span>"
 
     metrics = output.get("metrics") or {}
@@ -775,13 +780,13 @@ def agent_tooltip_html(name: str, output: dict[str, Any] | None) -> str:
             val_str = f"{v:.3f}" if abs(v) < 100 else f"{v:,.0f}"
         else:
             val_str = str(v)
-        label = k.replace("_", " ").upper()
-        lines.append(f"<b>{label}:</b> {val_str}")
+        label = html.escape(k.replace("_", " ").upper())
+        lines.append(f"<b>{label}:</b> {html.escape(val_str)}")
 
     analysis = output.get("analysis")
     if isinstance(analysis, str) and analysis:
         # First 160 chars of the analysis
-        snippet = analysis[:160] + ("…" if len(analysis) > 160 else "")
+        snippet = html.escape(analysis[:160] + ("…" if len(analysis) > 160 else ""))
         lines += ["", f"<i style='color:#AAAAAA'>{snippet}</i>"]
 
     return "<br>".join(lines)

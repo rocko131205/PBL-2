@@ -23,3 +23,9 @@ env/
 .Rhistory
 .RData
 .Rproj.user/
+
+# Streamlit local secrets
+.streamlit/secrets.toml
+
+# Red-team run output
+redteam_results*.json

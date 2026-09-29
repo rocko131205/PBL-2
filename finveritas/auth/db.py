@@ -6,7 +6,7 @@ Easily switchable from local MongoDB to MongoDB Atlas by changing MONGO_URI.
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from pymongo import ASCENDING, MongoClient
@@ -38,6 +38,18 @@ def _ensure_indexes(db: Database) -> None:
     db.file_history.create_index([("user_id", ASCENDING)], background=True)
     db.file_history.create_index([("user_id", ASCENDING), ("timestamp", ASCENDING)], background=True)
 
+    # Security collections — TTL indexes make MongoDB purge expired records itself
+    db.sessions.create_index([("jti", ASCENDING)], unique=True)
+    db.sessions.create_index([("user_id", ASCENDING)])
+    db.sessions.create_index([("expires_at", ASCENDING)], expireAfterSeconds=0)
+    db.rate_limits.create_index([("key", ASCENDING), ("ts", ASCENDING)])
+    db.rate_limits.create_index([("expires_at", ASCENDING)], expireAfterSeconds=0)
+    db.password_resets.create_index([("email", ASCENDING)], unique=True)
+    db.password_resets.create_index([("expires_at", ASCENDING)], expireAfterSeconds=0)
+    db.audit_log.create_index([("timestamp", ASCENDING)])
+    db.audit_log.create_index([("user_id", ASCENDING), ("timestamp", ASCENDING)])
+    db.audit_log.create_index([("event", ASCENDING), ("timestamp", ASCENDING)])
+
 
 def get_users() -> Collection:
     return get_db()["users"]
@@ -45,6 +57,29 @@ def get_users() -> Collection:
 
 def get_file_history() -> Collection:
     return get_db()["file_history"]
+
+
+def get_sessions() -> Collection:
+    return get_db()["sessions"]
+
+
+def get_rate_limits() -> Collection:
+    return get_db()["rate_limits"]
+
+
+def get_password_resets() -> Collection:
+    return get_db()["password_resets"]
+
+
+def get_audit_log() -> Collection:
+    return get_db()["audit_log"]
+
+
+def _reset_for_tests(db: Database) -> None:
+    """Point the singleton at an injected database (used by the test suite)."""
+    global _client, _db
+    _client, _db = None, db
+    _ensure_indexes(db)
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +102,11 @@ def make_user_doc(
         "state": state,
         "city": city,
         "password_hash": password_hash,
-        "created_at": datetime.utcnow(),
+        "role": "analyst",          # "analyst" | "admin" — promote admins in the DB, never via the UI
+        "mfa_enabled": False,
+        "mfa_secret_enc": None,     # Fernet-encrypted TOTP secret
+        "mfa_last_step": None,      # last accepted TOTP time-step (replay protection)
+        "created_at": datetime.now(timezone.utc),
         "last_login": None,
     }
 
@@ -89,5 +128,5 @@ def make_history_doc(
         "entity_name": entity_name,
         "fields_loaded": fields_loaded,
         "credibility_score": credibility_score,
-        "timestamp": datetime.utcnow(),
+        "timestamp": datetime.now(timezone.utc),
     }

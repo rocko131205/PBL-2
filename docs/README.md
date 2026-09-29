@@ -57,8 +57,8 @@ system evolved (V1 → V2 → V3), see **[VERSION_HISTORY.md](VERSION_HISTORY.md
 | **Industry-aware** | SaaS / financial / manufacturing / retail / general scoring profiles |
 | **Currency-correct** | FX-normalizable; INR shows in lakh/crore, others in K/M/B/T; reported-unit rescaling |
 | **Guardrailed AI** | Any OpenAI-compatible endpoint (Groq, LM Studio, Ollama, OpenAI); explains, never calculates |
-| **Auth** | MongoDB users, bcrypt, JWT sessions, email OTP |
-| **Tested** | 153 pytest tests |
+| **Security** | bcrypt, TOTP MFA, revocable server-side JWT sessions, lockout, hardened OTP reset, audit log, admin dashboard, prompt-injection guard — see [SECURITY.md](../SECURITY.md) |
+| **Tested** | 266 pytest tests (113 security regression tests) + bandit / pip-audit / gitleaks in CI |
 
 ---
 
@@ -75,12 +75,13 @@ streamlit run app.py                                    # open http://localhost:
 ### Environment variables (`.env` in the repo root)
 
 ```env
-# Security
-JWT_SECRET=your_secret
+# Security — REQUIRED, random, >= 32 chars (the app refuses to start otherwise)
+#   python -c "import secrets; print(secrets.token_hex(32))"
+JWT_SECRET=
 MONGO_URI=mongodb+srv://...
 
 # Email OTP
-SMTP_SERVER=smtp.gmail.com
+SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=you@gmail.com
 SMTP_PASS=your_app_password
@@ -115,8 +116,11 @@ numbers work regardless.
 ## Testing
 
 ```sh
-pytest            # 153 tests
+pytest                     # 266 tests
+pytest tests/security -q   # security regression suite only
 ```
+
+See [SECURITY.md](../SECURITY.md) for the security assessment, threat model and scanning commands.
 
 ---
 

@@ -40,8 +40,10 @@ from finveritas.shared.components import (
     render_section_header,
     render_top_bar,
 )
-from finveritas.auth.controller import decode_token
+from finveritas.auth.controller import decode_token, is_admin, logout
 from finveritas.auth.pages import page_login, page_register, page_forgot_password, page_history
+from finveritas.auth.security_pages import page_security_settings, page_security_dashboard
+from finveritas.security.config import validate_startup
 from finveritas.auth.db import get_file_history, make_history_doc
 
 import os
@@ -71,14 +73,26 @@ def main() -> None:
 
     import time
 
+    # Fail closed: never run with a missing or default signing secret.
+    problems = validate_startup()
+    if problems:
+        st.error("Server security configuration is incomplete:\n\n" + "\n".join(f"- {p}" for p in problems))
+        st.stop()
+
     if st.query_params.get("logout") == "1":
+        logout(st.session_state.get("auth_token"))
         st.session_state.clear()
         st.query_params.clear()
         st.toast("Successfully signed out.", icon="👋")
 
+    # Legacy links may still carry ?token=… — strip it, never trust it.
+    if "token" in st.query_params:
+        del st.query_params["token"]
+
     # ── Auth gate ─────────────────────────────────────────────────────────────
-    # On page load, check URL query params for a persisted JWT token.
-    token = st.query_params.get("token") or st.session_state.get("auth_token")
+    # The JWT lives only in server-side session state; it is re-validated against
+    # the sessions collection on every run so revocation takes effect immediately.
+    token = st.session_state.get("auth_token")
     user: dict | None = None
     if token:
         user = decode_token(token)
@@ -86,19 +100,15 @@ def main() -> None:
             # Inactivity timeout check (15 minutes)
             last_active = st.session_state.get("last_active_time", time.time())
             if time.time() - last_active > 15 * 60:
-                st.query_params.clear()
-                st.session_state.pop("auth_token", None)
-                st.session_state.pop("auth_user", None)
+                logout(token)
                 st.toast("Locked due to 15 minutes of inactivity.", icon="🔒")
                 user = None
             else:
                 st.session_state["last_active_time"] = time.time()
-                st.session_state["auth_token"] = token
                 st.session_state["auth_user"]  = user
-                
+
         if not user:
-            # Token expired or invalid — clear it and ask to log in again
-            st.query_params.clear()
+            # Token expired, revoked or invalid — clear it and ask to log in again
             st.session_state.pop("auth_token", None)
             st.session_state.pop("auth_user", None)
 
@@ -148,7 +158,10 @@ def main() -> None:
             "Agent Workflow",
             "Basel III Alignment",
             "My File History",
+            "Security Settings",
         ]
+        if is_admin(user["user_id"]):
+            _nav_options.append("Security Dashboard")
         # Default index — use nav_target if set (auto-redirect)
         _default_idx = 0
         if _nav_target and _nav_target in _nav_options:
@@ -191,6 +204,12 @@ def main() -> None:
         av_api_key   = ""
 
         render_hr()
+        if st.button("Sign out", use_container_width=True, key="sidebar_signout"):
+            logout(st.session_state.get("auth_token"))
+            st.session_state.clear()
+            st.rerun()
+
+        render_hr()
         has_data    = bool(st.session_state.get("ocr_cache"))
         has_results = bool(st.session_state.get("agent_outputs"))
         st.markdown(
@@ -211,6 +230,10 @@ def main() -> None:
         page_basel()
     elif "History" in page:
         page_history(user_id=user["user_id"])
+    elif page == "Security Settings":
+        page_security_settings(user)
+    elif page == "Security Dashboard":
+        page_security_dashboard(user)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,57 @@
+name: security
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"   # weekly: catch newly published CVEs in unchanged dependencies
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Unit + security regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+
+  sast:
+    name: Static analysis (bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "bandit>=1.7"
+      # Fail the build on medium+ severity, medium+ confidence findings.
+      - run: bandit -r finveritas app.py scripts -ll -ii
+
+  dependencies:
+    name: Dependency vulnerabilities (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "pip-audit>=2.7"
+      - run: pip-audit -r requirements.txt --progress-spinner off
+
+  secrets:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # scan full history, not just the latest commit
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

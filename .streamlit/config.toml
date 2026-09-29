@@ -1,0 +1,17 @@
+# Hardened Streamlit server settings.
+
+[server]
+# Reject oversized uploads before they reach application code (MB).
+maxUploadSize = 25
+maxMessageSize = 50
+# Cross-site request forgery protection for uploads (default on — keep it on).
+enableXsrfProtection = true
+enableCORS = true
+
+[client]
+# Don't show Python tracebacks to end users (information disclosure, CWE-209).
+showErrorDetails = "none"
+toolbarMode = "viewer"
+
+[browser]
+gatherUsageStats = false

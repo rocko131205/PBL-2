@@ -1,0 +1,4 @@
+# Security tooling (used locally and in .github/workflows/security.yml)
+-r requirements.txt
+bandit>=1.7             # SAST for Python
+pip-audit>=2.7          # Known-vulnerability scan of dependencies

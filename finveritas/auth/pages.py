@@ -1,14 +1,15 @@
 """Auth UI pages for FinVeritas — Login, Register, Forgot Password, File History."""
 from __future__ import annotations
 
+import html
 import re
 import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime
 
 from finveritas.auth.controller import (
-    login_user, register_user, send_otp, verify_otp,
-    reset_password, decode_token,
+    login_user, complete_mfa_login, register_user, send_otp, verify_otp,
+    complete_password_reset, decode_token,
 )
 from finveritas.auth.states import ALL_STATES, get_cities
 from finveritas.auth.db import get_file_history
@@ -380,6 +381,16 @@ def _left_header(page_label: str, page_sub: str = "") -> None:
 
 # ── Login Page ────────────────────────────────────────────────────────────────
 
+def _start_session(token: str) -> None:
+    """Keep the JWT in server-side session state only — never in the URL.
+
+    Tokens in query strings leak through browser history, proxy/server logs,
+    Referer headers and shared links.
+    """
+    st.session_state["auth_token"] = token
+    st.session_state["auth_user"] = decode_token(token)
+
+
 def page_login() -> None:
     left_col, right_col = st.columns([1, 1], gap="small")
 
@@ -387,6 +398,26 @@ def page_login() -> None:
         _right_panel()
 
     with left_col:
+        pending = st.session_state.get("mfa_pending_user")
+        if pending:
+            _left_header("Two-Factor Authentication", "Enter the 6-digit code from your authenticator app")
+            with st.form("mfa_login_form", clear_on_submit=True):
+                code = st.text_input("Authentication code", max_chars=6, placeholder="123456",
+                                     key="mfa_login_code")
+                verify_clicked = st.form_submit_button("Verify  →", use_container_width=True)
+            if verify_clicked:
+                ok, result = complete_mfa_login(pending, code)
+                if ok:
+                    st.session_state.pop("mfa_pending_user", None)
+                    _start_session(result)
+                    st.rerun()
+                else:
+                    st.error(result)
+            if st.button("← Cancel", key="mfa_cancel", use_container_width=True):
+                st.session_state.pop("mfa_pending_user", None)
+                st.rerun()
+            return
+
         _left_header("Sign In", "Welcome back")
 
         with st.form("login_form", clear_on_submit=False):
@@ -400,10 +431,11 @@ def page_login() -> None:
                 st.error("Please enter both email and password.")
             else:
                 ok, result = login_user(email.strip(), password)
-                if ok:
-                    st.session_state["auth_token"] = result
-                    st.session_state["auth_user"]  = decode_token(result)
-                    st.query_params["token"] = result
+                if ok and isinstance(result, dict) and result.get("mfa_required"):
+                    st.session_state["mfa_pending_user"] = result["user_id"]
+                    st.rerun()
+                elif ok:
+                    _start_session(result)
                     st.rerun()
                 else:
                     st.error(result)
@@ -541,6 +573,8 @@ def page_register() -> None:
 
 # ── Forgot Password ───────────────────────────────────────────────────────────
 
+_RESET_KEYS = ["otp_step", "otp_email", "otp_notice", "reset_grant"]
+
 def page_forgot_password() -> None:
     step = st.session_state.get("otp_step", 1)
 
@@ -578,19 +612,16 @@ def page_forgot_password() -> None:
                     with st.spinner("Sending OTP via Gmail…"):
                         ok, msg = send_otp(email.strip(), st.session_state)
                     if ok:
-                        st.success("📧 OTP sent — check your inbox (valid 2 minutes).")
+                        st.session_state["otp_notice"] = msg
                         st.session_state["otp_step"] = 2
                         st.rerun()
                     else:
                         st.error(msg)
 
         elif step == 2:
-            sent_to = st.session_state.get("otp_data", {}).get("email", "your email")
-            st.markdown(
-                f'<p style="font-size:10px;color:#D4963A;font-family:monospace;margin-bottom:8px;">'
-                f'OTP sent to: {sent_to}</p>',
-                unsafe_allow_html=True,
-            )
+            notice = st.session_state.get("otp_notice")
+            if notice:
+                st.info(notice)
             with st.form("otp_verify_form"):
                 otp_input = st.text_input("6-Digit OTP", placeholder="123456", max_chars=6)
                 submitted  = st.form_submit_button("Verify OTP  →", use_container_width=True)
@@ -627,12 +658,10 @@ def page_forgot_password() -> None:
                 elif new_pw != conf_pw:
                     st.error("Passwords do not match.")
                 else:
-                    ok, msg = reset_password(
-                        st.session_state.get("otp_verified_email", ""), new_pw
-                    )
+                    ok, msg = complete_password_reset(st.session_state, new_pw)
                     if ok:
-                        st.success("✅ Password reset! Redirecting to login…")
-                        for k in ["otp_step", "otp_data", "otp_verified_email"]:
+                        st.success("✅ Password reset! All existing sessions were signed out.")
+                        for k in _RESET_KEYS:
                             st.session_state.pop(k, None)
                         st.session_state["auth_page"] = "login"
                         st.rerun()
@@ -641,7 +670,7 @@ def page_forgot_password() -> None:
 
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("← Back to Login", key="forgot_back", use_container_width=True):
-            for k in ["otp_step", "otp_data", "otp_verified_email"]:
+            for k in _RESET_KEYS:
                 st.session_state.pop(k, None)
             st.session_state["auth_page"] = "login"
             st.rerun()
@@ -664,8 +693,8 @@ def page_history(user_id: str) -> None:
             .sort("timestamp", -1)
             .limit(100)
         )
-    except Exception as exc:
-        st.error(f"Could not load history: {exc}")
+    except Exception:
+        st.error("Could not load history right now. Please try again later.")
         return
 
     if not records:
@@ -680,8 +709,9 @@ def page_history(user_id: str) -> None:
     src_colour = {"pdf": "#D4963A", "ticker": "#2E9BB8", "csv": "#3AB87A"}
     rows_html = ""
     for r in records:
-        src     = r.get("source_type", "—")
+        src     = str(r.get("source_type", "—"))
         col     = src_colour.get(src, "#9A9AB0")
+        esc     = lambda v: html.escape(str(v))  # noqa: E731 — values come from uploaded files
         ts      = r.get("timestamp")
         ts_str  = ts.strftime("%Y-%m-%d %H:%M") if isinstance(ts, datetime) else "—"
         score   = r.get("credibility_score", "—")
@@ -691,14 +721,14 @@ def page_history(user_id: str) -> None:
         )
         rows_html += (
             f'<tr style="border-bottom:1px solid #12131E;">'
-            f'<td style="padding:10px 12px;color:#D8D8E0;">{r.get("entity_name","—")}</td>'
+            f'<td style="padding:10px 12px;color:#D8D8E0;">{esc(r.get("entity_name","—"))}</td>'
             f'<td style="padding:10px 12px;">'
             f'<span style="color:{col};font-size:9px;font-weight:700;'
-            f'background:{col}18;padding:2px 8px;border-radius:2px;">{src.upper()}</span></td>'
+            f'background:{col}18;padding:2px 8px;border-radius:2px;">{esc(src.upper())}</span></td>'
             f'<td style="padding:10px 12px;color:#5A5A72;font-family:monospace;">'
-            f'{r.get("source_label","—")}</td>'
+            f'{esc(r.get("source_label","—"))}</td>'
             f'<td style="padding:10px 12px;color:{sc_col};font-weight:700;'
-            f'font-family:monospace;">{score}</td>'
+            f'font-family:monospace;">{esc(score)}</td>'
             f'<td style="padding:10px 12px;color:#3A3A52;font-family:monospace;">{ts_str}</td>'
             f'</tr>'
         )

@@ -11,9 +11,10 @@ PBL-2/                          ← repo root
 ├── finveritas/                 ← ALL source code
 │   │
 │   ├── auth/                   ── 1. LOGIN / SIGNUP (runs first) ──────────────
-│   │   ├── pages.py            login, register, forgot-password, history screens
-│   │   ├── controller.py       JWT create/verify, password hashing, OTP
-│   │   ├── db.py               MongoDB users + saved file history
+│   │   ├── pages.py            login (+MFA step), register, forgot-password, history screens
+│   │   ├── security_pages.py   Security Settings (MFA, sessions) + admin Security Dashboard
+│   │   ├── controller.py       login/lockout, MFA, sessions, hardened OTP reset
+│   │   ├── db.py               MongoDB users, history, sessions, rate limits, audit log
 │   │   └── states.py           state/city data for the signup form
 │   │
 │   ├── ingestion/              ── 2. GET DATA IN (the Upload page) ────────────
@@ -42,6 +43,16 @@ PBL-2/                          ← repo root
 │   │       ├── dscr.py           debt_service.py   (DSCR ratio + full schedule/stress)
 │   │       ├── scorecard.py      memo.py
 │   │
+│   ├── security/               ── SECURITY CONTROLS (used by all layers) ───────
+│   │   ├── config.py           fail-closed secrets, security constants
+│   │   ├── sessions.py         revocable server-side JWT sessions
+│   │   ├── ratelimit.py        brute-force throttling (MongoDB, TTL)
+│   │   ├── mfa.py              TOTP + encrypted secrets
+│   │   ├── audit.py            security event log
+│   │   ├── passwords.py        server-side password policy
+│   │   ├── uploads.py          upload validation (size, magic bytes, zip bomb)
+│   │   └── llm_guard.py        prompt-injection screening + output checks
+│   │
 │   └── shared/                 ── USED EVERYWHERE ─────────────────────────────
 │       ├── schema.py           data models (NormalizedCompanyRecord, Fact Ledger)
 │       ├── formatting.py       money/period/percent formatting (₹ lakh/crore, $ M/B)
@@ -50,12 +61,13 @@ PBL-2/                          ← repo root
 │       ├── components.py       reusable Streamlit UI components
 │       └── styles.css          the design system
 │
-└── tests/                      153 tests (pytest)
+├── scripts/                    llm_redteam.py (live injection test), make_admin.py
+└── tests/                      266 tests (pytest); tests/security/ = 113 security tests
 ```
 
 ## Execution flow
 
-1. **`app.py`** starts → checks the JWT. Not logged in → **`finveritas/auth/pages.py`**.
+1. **`app.py`** starts → refuses to run without a strong `JWT_SECRET` → validates the session JWT against the `sessions` collection. Not logged in → **`finveritas/auth/pages.py`**.
 2. Logged in → sidebar nav. **Upload** → **`finveritas/ingestion/page.py`** ingests via the
    right module (`pdf/` · `ticker` · `spreadsheet`), scores credibility, then calls
    **`finveritas/analysis/workflow.py`** to run the pipeline.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import traceback
 import html
+import re
 from typing import Any
 
 import pandas as pd
@@ -41,11 +42,30 @@ from finveritas.shared.components import (
 from finveritas.auth.controller import decode_token
 from finveritas.auth.pages import page_login, page_register, page_forgot_password, page_history
 from finveritas.auth.db import get_file_history, make_history_doc
+from finveritas.security import audit
+from finveritas.security.uploads import UploadRejected, validate_pdf_batch, validate_spreadsheet
 
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _show_error(context: str, exc: Exception) -> None:
+    """Show a safe message; full details go to the server log with a reference id.
+
+    Raw exception text and tracebacks can disclose file paths, library versions,
+    database hosts or query structure to the user (CWE-209).
+    """
+    import secrets
+    import sys
+
+    ref = secrets.token_hex(4)
+    print(f"[error {ref}] {context}: {type(exc).__name__}: {exc}\n{traceback.format_exc()}", file=sys.stderr)
+    if isinstance(exc, (UploadRejected, ValueError)):
+        st.error(f"{context}: {exc}")
+    else:
+        st.error(f"{context}. An unexpected error occurred (reference {ref}).")
 
 
 def _safe_run(name: str, fn) -> dict[str, Any]:
@@ -102,7 +122,7 @@ def _render_credibility_panel(
         f'<div style="font-size:8px;color:var(--c-text3,#5A5A72);letter-spacing:0.18em;text-transform:uppercase;margin-bottom:3px;">CREDIBILITY SCORE / 100</div>'
         f'<div style="font-size:12px;color:{colour};font-weight:700;letter-spacing:0.12em;">{conf_label[confidence]}</div>'
         f'<div style="font-size:9px;color:var(--c-text3,#5A5A72);margin-top:3px;letter-spacing:0.06em;">'
-        f'SOURCE: {report.source.replace("_"," ").upper()} &nbsp;&middot;&nbsp; ENTITY: {report.entity}'
+        f'SOURCE: {report.source.replace("_"," ").upper()} &nbsp;&middot;&nbsp; ENTITY: {html.escape(str(report.entity))}'
         f'</div></div></div></div>',
         unsafe_allow_html=True,
     )
@@ -115,8 +135,8 @@ def _render_credibility_panel(
                 f'<span style="font-size:9px;font-weight:700;color:{badge_col};background:{badge_col}18;'
                 f'padding:1px 5px;border-radius:2px;letter-spacing:0.1em;margin-top:1px;white-space:nowrap;">{badge_text}</span>'
                 f'<div>'
-                f'<span style="font-size:11px;color:var(--c-text,#D8D8E0);font-weight:600;">{check.name}</span><br>'
-                f'<span style="font-size:10px;color:var(--c-text3,#5A5A72);font-family:monospace;">{check.detail}</span>'
+                f'<span style="font-size:11px;color:var(--c-text,#D8D8E0);font-weight:600;">{html.escape(str(check.name))}</span><br>'
+                f'<span style="font-size:10px;color:var(--c-text3,#5A5A72);font-family:monospace;">{html.escape(str(check.detail))}</span>'
                 f'</div></div>',
                 unsafe_allow_html=True,
             )
@@ -405,10 +425,8 @@ def _run_agent_pipeline(
                 llm_api_key=api_key,
             )
         except Exception as e:
-            st.error(f"Error running V2 analysis: {e}")
-            import traceback
-            st.code(traceback.format_exc(), language="text")
-            result_state = {"errors": [str(e)]}
+            _show_error("Analysis failed", e)
+            result_state = {"errors": ["Analysis failed — see server log."]}
 
     # Save results to session state — V3 structure (single source of truth: the fact ledger)
     st.session_state["agent_outputs"] = {
@@ -486,12 +504,18 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
             cache_key = ("pdf",) + tuple(sorted(f.name for f in uploaded_files))
             cached_pdf = st.session_state.get("cache_pdf", {})
             if cached_pdf.get("cache_key") != cache_key:
-                uploads = [(f.getvalue(), f.name) for f in uploaded_files]
+                try:
+                    validated = validate_pdf_batch([(f.getvalue(), f.name) for f in uploaded_files])
+                except UploadRejected as exc:
+                    audit.log_event(audit.UPLOAD_REJECTED, detail={"kind": "pdf", "reason": str(exc)})
+                    st.error(str(exc))
+                    st.stop()
+                uploads = [(v.data, v.filename) for v in validated]
                 with st.spinner(f"Running OCR parser on {len(uploads)} file(s)…"):
                     try:
                         payload, written_path, agent_paths = parse_pdf_to_json(uploads=uploads, output_dir="output")
                     except Exception as exc:
-                        st.error(f"OCR failed: {exc}")
+                        _show_error("OCR failed", exc)
                         st.stop()
                 st.session_state["cache_pdf"] = {
                     "cache_key": cache_key, "payload": payload,
@@ -523,6 +547,11 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
 
         if fetch_btn and ticker_input.strip():
             ticker = ticker_input.strip().upper()
+            # The ticker is interpolated into third-party API URLs (FMP / Alpha Vantage):
+            # allow-list its format so it can't smuggle path segments or query params.
+            if not re.fullmatch(r"\^?[A-Z0-9][A-Z0-9.\-=]{0,14}", ticker):
+                st.error("Invalid ticker format. Use letters, digits, '.', '-' (e.g. INFY.NS, BRK-B).")
+                st.stop()
             cache_key = ("ticker", ticker)
             with st.spinner(f"Fetching financial data for {ticker} via yfinance…"):
                 try:
@@ -544,7 +573,7 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
                     
                     _, written_path, agent_paths = payload_to_agent_files(payload, output_dir="output")
                 except Exception as exc:
-                    st.error(f"Ticker fetch failed: {exc}")
+                    _show_error("Ticker fetch failed", exc)
                     st.stop()
             st.session_state["cache_ticker"] = {
                 "cache_key": cache_key, "payload": payload,
@@ -604,17 +633,23 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
                 st.warning("Please enter the company name before loading.")
             else:
                 cache_key = ("csv", csv_file.name, company_name_input.strip())
+                try:
+                    sheet = validate_spreadsheet(csv_file.getvalue(), csv_file.name)
+                except UploadRejected as exc:
+                    audit.log_event(audit.UPLOAD_REJECTED, detail={"kind": "spreadsheet", "reason": str(exc)})
+                    st.error(str(exc))
+                    st.stop()
                 with st.spinner("Parsing financial spreadsheet…"):
                     try:
                         payload = load_private_company_data(
-                            file_bytes=csv_file.getvalue(),
-                            filename=csv_file.name,
+                            file_bytes=sheet.data,
+                            filename=sheet.filename,
                             company_name=company_name_input.strip(),
                             currency=currency_input,
                         )
                         _, written_path, agent_paths = payload_to_agent_files(payload, output_dir="output")
                     except Exception as exc:
-                        st.error(f"CSV ingestion failed: {exc}")
+                        _show_error("CSV ingestion failed", exc)
                         st.stop()
                 st.session_state["cache_csv"] = {
                     "cache_key": cache_key, "payload": payload,
