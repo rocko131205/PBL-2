@@ -1,0 +1,41 @@
+# {{ ansible_managed }}
+[Unit]
+Description=FinVeritas financial analysis web app (Streamlit)
+Documentation=https://github.com/rocko131205/PBL-2
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ finveritas_user }}
+Group={{ finveritas_group }}
+WorkingDirectory={{ finveritas_home }}/current
+EnvironmentFile={{ finveritas_config_dir }}/finveritas.env
+Environment=HOME=/var/lib/finveritas PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# Bound to localhost — nginx is the only public entry point.
+ExecStart={{ finveritas_home }}/venv/bin/streamlit run app.py \
+    --server.address=127.0.0.1 --server.port={{ finveritas_port }} \
+    --server.headless=true --server.fileWatcherType=none
+Restart=on-failure
+RestartSec=5
+StateDirectory=finveritas
+UMask=0077
+
+# Sandboxing: the app can write only to its state dir and a private /tmp.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

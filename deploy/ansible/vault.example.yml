@@ -1,0 +1,17 @@
+# Secrets for site.yml. Set them up once:
+#
+#   cp vault.example.yml group_vars/finveritas/vault.yml
+#   # fill in the values, then encrypt it:
+#   ansible-vault encrypt group_vars/finveritas/vault.yml
+#
+# vault.yml is gitignored — never commit it unencrypted.
+
+vault_jwt_secret: ""            # REQUIRED, >= 32 random chars: python3 -c "import secrets; print(secrets.token_hex(32))"
+vault_mongo_uri: ""             # REQUIRED, e.g. mongodb+srv://<user>:<password>@<cluster>/?appName=finveritas
+
+vault_field_encryption_key: ""  # optional — derived from vault_jwt_secret when empty
+vault_smtp_user: ""             # optional — password-reset emails
+vault_smtp_pass: ""
+vault_llm_api_key: ""           # optional — AI narrative / assistant
+vault_newsapi_key: ""
+vault_fmp_api_key: ""

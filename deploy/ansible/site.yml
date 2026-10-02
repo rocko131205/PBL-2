@@ -1,0 +1,339 @@
+---
+# FinVeritas runtime — turns a fresh Ubuntu 24.04 server into a running FinVeritas host.
+# Diagram, setup and usage: docs/CONFIG_MANAGEMENT.md
+#
+#   ansible-galaxy collection install -r requirements.yml
+#   ansible-playbook site.yml --ask-vault-pass
+#
+# Idempotent: re-running it on a configured server reports changed=0.
+# Tags: base · users · app · web · firewall · verify   (e.g. --tags app to ship new code)
+
+- name: Configure the FinVeritas runtime
+  hosts: finveritas
+  become: true
+
+  vars:
+    finveritas_release_id: "{{ finveritas_release.stdout }}"
+    finveritas_release_dir: "{{ finveritas_home }}/releases/{{ finveritas_release_id }}"
+    finveritas_archive: "/tmp/finveritas-{{ finveritas_release_id }}.tar.gz"
+
+  pre_tasks:
+    - name: Check the target is Ubuntu/Debian
+      ansible.builtin.assert:
+        that: ansible_facts['os_family'] == 'Debian'
+        fail_msg: "site.yml targets Ubuntu/Debian, not {{ ansible_facts['distribution'] }}."
+        quiet: true
+      tags: always
+
+    - name: Refuse to deploy without the required secrets (the app fails closed without them)
+      ansible.builtin.assert:
+        that:
+          - vault_jwt_secret | default('') | length >= 32
+          - vault_mongo_uri | default('') | length > 0
+        fail_msg: >-
+          Set vault_jwt_secret (32+ chars) and vault_mongo_uri in
+          group_vars/finveritas/vault.yml — see vault.example.yml.
+        quiet: true
+      tags: always
+
+  tasks:
+    # ── 1. Packages ───────────────────────────────────────────────────────────
+    - name: Install runtime packages
+      ansible.builtin.apt:
+        name: "{{ finveritas_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      tags: base
+
+    - name: Enable automatic security updates
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          // Managed by Ansible (deploy/ansible/site.yml)
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+        owner: root
+        group: root
+        mode: "0644"
+      tags: base
+
+    # ── 2. Users & groups ─────────────────────────────────────────────────────
+    - name: Create the service group
+      ansible.builtin.group:
+        name: "{{ finveritas_group }}"
+        system: true
+      tags: users
+
+    - name: Create the service user (system account, no login shell)
+      ansible.builtin.user:
+        name: "{{ finveritas_user }}"
+        group: "{{ finveritas_group }}"
+        system: true
+        shell: /usr/sbin/nologin
+        home: /var/lib/finveritas
+        create_home: false
+      tags: users
+
+    - name: Create the ops group
+      ansible.builtin.group:
+        name: "{{ finveritas_ops_group }}"
+      tags: users
+
+    - name: Create or remove ops user accounts
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        groups: ["{{ finveritas_ops_group }}", systemd-journal]   # journal group = read app logs
+        append: true
+        shell: /bin/bash
+        state: "{{ item.state | default('present') }}"
+        remove: "{{ item.state | default('present') == 'absent' }}"
+      loop: "{{ finveritas_ops_users }}"
+      loop_control:
+        label: "{{ item.name }}"
+      tags: users
+
+    - name: Install ops users' SSH keys (exclusive — any other key is removed)
+      ansible.posix.authorized_key:
+        user: "{{ item.name }}"
+        key: "{{ item.ssh_key }}"
+        exclusive: true
+      loop: "{{ finveritas_ops_users }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: item.state | default('present') == 'present'
+      tags: users
+
+    - name: Let the ops group restart the service, and nothing else
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/finveritas-ops
+        content: |
+          # Managed by Ansible. Deliberately no pager-capable commands (systemctl status,
+          # journalctl): a pager under sudo is a root shell. Logs are readable via the
+          # systemd-journal group instead.
+          %{{ finveritas_ops_group }} ALL=(root) NOPASSWD: /usr/bin/systemctl restart finveritas, /usr/bin/systemctl restart finveritas.service
+        owner: root
+        group: root
+        mode: "0440"
+        validate: visudo -cf %s
+      tags: users
+
+    # ── 3. Application files ──────────────────────────────────────────────────
+    - name: Create application directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "{{ finveritas_home }}", group: root, mode: "0755" }
+        - { path: "{{ finveritas_home }}/releases", group: "{{ finveritas_group }}", mode: "0750" }
+        - { path: "{{ finveritas_config_dir }}", group: "{{ finveritas_group }}", mode: "0750" }
+      loop_control:
+        label: "{{ item.path }}"
+      tags: app
+
+    - name: Resolve the git ref to deploy to a commit
+      ansible.builtin.command:
+        cmd: git rev-parse --short=12 "{{ finveritas_version }}^{commit}"
+        chdir: "{{ finveritas_src_dir }}"
+      register: finveritas_release
+      changed_when: false
+      delegate_to: localhost
+      become: false
+      run_once: true
+      tags: app
+
+    - name: Package that commit — tracked files only, so .env and local files never ship
+      ansible.builtin.command:  # noqa: command-instead-of-module (git module can't archive a local repo)
+        argv: "{{ ['git', 'archive', '--format=tar.gz', '--output=' ~ finveritas_archive, finveritas_release_id, '--']
+                  + finveritas_release_paths }}"
+        chdir: "{{ finveritas_src_dir }}"
+        creates: "{{ finveritas_archive }}"
+      changed_when: false   # a local build artifact; the server-side change is "Unpack the release"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      tags: app
+
+    - name: Create the release directory
+      ansible.builtin.file:
+        path: "{{ finveritas_release_dir }}"
+        state: directory
+        owner: root
+        group: "{{ finveritas_group }}"
+        mode: "0750"
+      tags: app
+
+    - name: Unpack the release
+      ansible.builtin.unarchive:
+        src: "{{ finveritas_archive }}"
+        dest: "{{ finveritas_release_dir }}"
+        creates: "{{ finveritas_release_dir }}/app.py"
+        owner: root
+        group: "{{ finveritas_group }}"
+      tags: app
+
+    - name: Make the release read-only to the service (root-owned code it can't modify)
+      ansible.builtin.file:
+        path: "{{ finveritas_release_dir }}"
+        recurse: true
+        owner: root
+        group: "{{ finveritas_group }}"
+        mode: u=rwX,g=rX,o=
+      tags: app
+
+    - name: Install Python dependencies into the virtualenv
+      ansible.builtin.pip:
+        requirements: "{{ finveritas_release_dir }}/requirements.txt"
+        virtualenv: "{{ finveritas_home }}/venv"
+        virtualenv_command: python3 -m venv
+      notify: Restart finveritas
+      tags: app
+
+    - name: Switch the live release (atomic symlink swap)
+      ansible.builtin.file:
+        src: "{{ finveritas_release_dir }}"
+        dest: "{{ finveritas_home }}/current"
+        state: link
+      notify: Restart finveritas
+      tags: app
+
+    - name: Find installed releases
+      ansible.builtin.find:
+        paths: "{{ finveritas_home }}/releases"
+        file_type: directory
+      register: finveritas_installed
+      tags: app
+
+    - name: Remove old releases, keeping the newest few for rollback
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ (finveritas_installed.files | sort(attribute='mtime', reverse=true))[finveritas_keep_releases:] }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      when: item.path != finveritas_release_dir
+      tags: app
+
+    - name: Write runtime configuration and secrets
+      ansible.builtin.template:
+        src: finveritas.env.j2
+        dest: "{{ finveritas_config_dir }}/finveritas.env"
+        owner: root
+        group: "{{ finveritas_group }}"
+        mode: "0640"
+      no_log: true
+      notify: Restart finveritas
+      tags: app
+
+    - name: Install the systemd service
+      ansible.builtin.template:
+        src: finveritas.service.j2
+        dest: /etc/systemd/system/finveritas.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart finveritas
+      tags: app
+
+    - name: Enable and start the service
+      ansible.builtin.systemd_service:
+        name: finveritas
+        enabled: true
+        state: started
+        daemon_reload: true
+      tags: app
+
+    # ── 4. Reverse proxy ──────────────────────────────────────────────────────
+    - name: Configure the nginx site
+      ansible.builtin.template:
+        src: nginx-finveritas.conf.j2
+        dest: /etc/nginx/sites-available/finveritas.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload nginx
+      tags: web
+
+    - name: Enable the FinVeritas site
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/finveritas.conf
+        dest: /etc/nginx/sites-enabled/finveritas.conf
+        state: link
+      notify: Reload nginx
+      tags: web
+
+    - name: Disable the default nginx site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload nginx
+      tags: web
+
+    - name: Enable and start nginx
+      ansible.builtin.systemd_service:
+        name: nginx
+        enabled: true
+        state: started
+      tags: web
+
+    # ── 5. Firewall ───────────────────────────────────────────────────────────
+    - name: Allow SSH first, so enabling the firewall can't lock us out
+      community.general.ufw:
+        rule: allow
+        port: "{{ ansible_port | default(22) | string }}"
+        proto: tcp
+      when: finveritas_firewall_enabled
+      tags: firewall
+
+    - name: Allow HTTP and HTTPS
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: ["80", "443"]
+      when: finveritas_firewall_enabled
+      tags: firewall
+
+    - name: Deny all other inbound traffic and enable the firewall
+      community.general.ufw:
+        state: enabled
+        default: deny
+        direction: incoming
+      when: finveritas_firewall_enabled
+      tags: firewall
+
+  post_tasks:
+    - name: Apply pending restarts before verifying
+      ansible.builtin.meta: flush_handlers
+      tags: always
+
+    - name: Verify the app answers through nginx
+      ansible.builtin.uri:
+        url: http://127.0.0.1/_stcore/health
+        return_content: true
+      register: finveritas_health
+      until: finveritas_health.status == 200 and finveritas_health.content == 'ok'
+      retries: 20
+      delay: 3
+      tags: verify
+
+  handlers:
+    - name: Restart finveritas
+      ansible.builtin.systemd_service:
+        name: finveritas
+        state: restarted
+        daemon_reload: true
+
+    - name: Check nginx configuration
+      ansible.builtin.command: nginx -t
+      changed_when: false
+      listen: Reload nginx
+
+    - name: Reload nginx service
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: reloaded
+      listen: Reload nginx

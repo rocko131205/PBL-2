@@ -131,6 +131,10 @@ build that is smoke-tested and scanned with Trivy. Every commit to `main` is pub
 GitHub Container Registry and deployed to Render by image digest, then health-checked.
 See **[CI_CD.md](CI_CD.md)** for the pipeline diagram, stages and one-time setup.
 
+To self-host on your own Ubuntu server instead, an Ansible playbook installs the packages,
+creates the users, and manages the files and services. See
+**[CONFIG_MANAGEMENT.md](CONFIG_MANAGEMENT.md)**.
+
 ---
 
 ## Disclaimer

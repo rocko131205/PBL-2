@@ -23,4 +23,5 @@ __pycache__/
 # Not needed at runtime
 tests/
 docs/
+deploy/
 redteam_results*.json

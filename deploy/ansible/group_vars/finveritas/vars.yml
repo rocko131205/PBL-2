@@ -1,0 +1,60 @@
+# Settings for every host in the "finveritas" group.
+# Secrets are NOT set here — they come from vault.yml (see ../../vault.example.yml).
+
+# ── Release ───────────────────────────────────────────────────────────────────
+finveritas_version: HEAD                          # any git ref: branch, tag or commit SHA
+finveritas_src_dir: "{{ playbook_dir }}/../.."    # repo root on the control node
+finveritas_release_paths:                         # what ships — same files as the Dockerfile
+  - app.py
+  - finveritas
+  - .streamlit/config.toml
+  - requirements.txt
+  - scripts/make_admin.py
+finveritas_keep_releases: 3                       # older releases kept on disk for rollback
+
+# ── Layout ────────────────────────────────────────────────────────────────────
+finveritas_user: finveritas
+finveritas_group: finveritas
+finveritas_home: /opt/finveritas
+finveritas_config_dir: /etc/finveritas
+finveritas_port: 8501                             # Streamlit, bound to localhost only
+finveritas_server_name: _                         # nginx server_name; set your domain here
+
+# ── Packages ──────────────────────────────────────────────────────────────────
+finveritas_packages:
+  - python3
+  - python3-venv
+  - python3-packaging       # needed by Ansible's pip module (missing on minimal images)
+  - nginx
+  - ufw
+  - unattended-upgrades
+  - ca-certificates
+
+# ── People ────────────────────────────────────────────────────────────────────
+# Ops users can read the app's logs and restart it — nothing else. To remove
+# someone, set `state: absent` on their entry and re-run the playbook.
+finveritas_ops_group: finveritas-ops
+finveritas_ops_users: []
+#  - name: alice
+#    ssh_key: "ssh-ed25519 AAAA... alice@laptop"
+#  - name: bob
+#    state: absent
+
+# ── Firewall ──────────────────────────────────────────────────────────────────
+finveritas_firewall_enabled: true                 # inbound: SSH, 80, 443 only
+
+# ── App configuration → /etc/finveritas/finveritas.env ────────────────────────
+finveritas_environment:
+  JWT_SECRET: "{{ vault_jwt_secret }}"
+  FIELD_ENCRYPTION_KEY: "{{ vault_field_encryption_key | default('') }}"
+  MONGO_URI: "{{ vault_mongo_uri }}"
+  MONGO_DB_NAME: finveritas
+  SMTP_HOST: smtp.gmail.com
+  SMTP_PORT: "587"
+  SMTP_USER: "{{ vault_smtp_user | default('') }}"
+  SMTP_PASS: "{{ vault_smtp_pass | default('') }}"
+  LLM_BASE_URL: https://generativelanguage.googleapis.com/v1beta/openai/
+  LLM_MODEL: gemini-3.5-flash
+  LLM_API_KEY: "{{ vault_llm_api_key | default('') }}"
+  NEWSAPI_KEY: "{{ vault_newsapi_key | default('') }}"
+  FMP_API_KEY: "{{ vault_fmp_api_key | default('') }}"

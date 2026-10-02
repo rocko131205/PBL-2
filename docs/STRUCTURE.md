@@ -8,6 +8,7 @@ PBL-2/                          ← repo root
 ├── app.py                      ← ENTRY POINT / router (auth gate, sidebar nav, dispatch)
 ├── requirements.txt
 ├── Dockerfile                  ← production image (built + deployed by .github/workflows/ci-cd.yml)
+├── deploy/ansible/             ← self-hosted runtime: site.yml playbook + inventory.ini
 ├── docs/                       ← all documentation
 ├── finveritas/                 ← ALL source code
 │   │
