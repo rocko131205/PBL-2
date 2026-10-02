@@ -31,49 +31,7 @@ pods
 
 step "2. Start traffic: an in-cluster client calls the Service 5 times a second"
 k delete pod traffic --ignore-not-found --wait
-k apply -f - <<'EOF'
-apiVersion: v1
-kind: Pod
-metadata:
-  name: traffic
-spec:
-  restartPolicy: Never
-  automountServiceAccountToken: false
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 10001
-    seccompProfile:
-      type: RuntimeDefault
-  containers:
-    - name: traffic
-      image: finveritas:1.0.0          # reuse the app image: it already has Python
-      imagePullPolicy: IfNotPresent
-      securityContext:
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
-        capabilities:
-          drop: ["ALL"]
-      command:
-        - python
-        - -u
-        - -c
-        - |
-          import time, urllib.request
-          ok = failed = 0
-          start = last = time.time()
-          while True:
-              try:
-                  with urllib.request.urlopen("http://finveritas/_stcore/health", timeout=2) as r:
-                      good = r.status == 200 and r.read() == b"ok"
-              except Exception as e:
-                  good = False
-                  print(f"FAILED request: {type(e).__name__}: {e}")
-              ok, failed = ok + good, failed + (not good)
-              if time.time() - last >= 5:
-                  last = time.time()
-                  print(f"t={last - start:4.0f}s  requests={ok + failed}  failed={failed}")
-              time.sleep(0.2)
-EOF
+k apply -f "$HERE/demo/traffic.yaml"
 k wait --for=condition=Ready pod/traffic --timeout=60s
 
 step "3. Rolling update: v1.0.0 -> v1.1.0"

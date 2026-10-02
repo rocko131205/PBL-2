@@ -1,0 +1,45 @@
+# Demo-only client: calls the Service 5 times a second and logs a running tally,
+# proving the app stays available during a rolling update or rollback.
+#   kubectl -n finveritas apply -f deploy/k8s/demo/traffic.yaml
+#   kubectl -n finveritas logs traffic --tail=1
+apiVersion: v1
+kind: Pod
+metadata:
+  name: traffic
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: traffic
+      image: finveritas:1.0.0          # reuse the app image: it already has Python
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      command:
+        - python
+        - -u
+        - -c
+        - |
+          import time, urllib.request
+          ok = failed = 0
+          start = last = time.time()
+          while True:
+              try:
+                  with urllib.request.urlopen("http://finveritas/_stcore/health", timeout=2) as r:
+                      good = r.status == 200 and r.read() == b"ok"
+              except Exception as e:
+                  good = False
+                  print(f"FAILED request: {type(e).__name__}: {e}")
+              ok, failed = ok + good, failed + (not good)
+              if time.time() - last >= 5:
+                  last = time.time()
+                  print(f"t={last - start:4.0f}s  requests={ok + failed}  failed={failed}")
+              time.sleep(0.2)

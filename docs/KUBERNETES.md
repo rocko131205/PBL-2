@@ -4,7 +4,8 @@ FinVeritas runs as a container image ([`Dockerfile`](../Dockerfile)) and is orch
 Kubernetes as a 3-replica **Deployment** behind a **Service**. Updates roll out one pod at a
 time with zero downtime, and a bad release can be rolled back with one command. Both were
 demonstrated on a real cluster, with an in-cluster client calling the app throughout:
-**301 requests, 0 failed.**
+**1,726 requests, 0 failed.** Screenshots of `kubectl rollout status` and `kubectl rollout undo`
+are [below](#the-demonstration).
 
 | File | Role |
 |------|------|
@@ -15,6 +16,8 @@ demonstrated on a real cluster, with an in-cluster client calling the app throug
 | [`deploy/k8s/overlays/local/`](../deploy/k8s/overlays/local) · [`production/`](../deploy/k8s/overlays/production) | Pick the image: locally built `finveritas:<ver>`, or `ghcr.io/rocko131205/pbl-2:sha-…` from CI |
 | [`deploy/k8s/secret.example.yaml`](../deploy/k8s/secret.example.yaml) | Secret template — never applied from git |
 | [`deploy/k8s/demo-rollout.sh`](../deploy/k8s/demo-rollout.sh) | The demonstration: deploy → rolling update → bad release → rollback, with live traffic |
+| [`deploy/k8s/demo/traffic.yaml`](../deploy/k8s/demo/traffic.yaml) | In-cluster client that calls the app 5×/s during the demo and counts failures |
+| [`docs/images/k8s-*.png`](images) | Terminal screenshots of the rolling update and rollback |
 
 ---
 
@@ -58,8 +61,68 @@ the old pods keep serving.
 
 ## The demonstration
 
-`sh deploy/k8s/demo-rollout.sh` on a **kind** cluster (Kubernetes v1.37). The output below is real;
-only repeated "Waiting…" lines are collapsed.
+Recorded live on a **kind** cluster (Kubernetes v1.37). Every command was typed into a real
+terminal connected to the cluster, and each screenshot shows its actual output. Throughout, the
+traffic client ([`demo/traffic.yaml`](../deploy/k8s/demo/traffic.yaml)) called the app 5 times a second.
+
+### 1 · Deploy v1.0.0 — `kubectl rollout status`
+
+![kubectl apply, rollout status and get pods for v1.0.0](images/k8s-1-deploy-rollout-status.png)
+
+`kubectl apply -k` creates the Deployment, and `rollout status` waits until all 3 replicas are available.
+
+### 2 · Rolling update to v1.1.0 — `kubectl set image` + `kubectl rollout status`
+
+![Mid-rollout pods and rollout status for the update to v1.1.0](images/k8s-2-rolling-update.png)
+
+Caught mid-rollout: the 3 old pods (`57cf94cff7`) are still serving next to 1 new "surge" pod
+(`678bd56bf8`). `rollout status` then follows the rollout to *successfully rolled out*.
+
+### 3 · How it rolled — ReplicaSets and events
+
+![Deployment, ReplicaSets and scaling events after the update](images/k8s-3-rollout-events.png)
+
+The events show `maxSurge: 1` / `maxUnavailable: 0` at work. The new ReplicaSet scaled
+0 → 1 → 2 → 3 while the old one scaled 3 → 2 → 1 → 0, one pod at a time and never below 3.
+
+### 4 · A bad release stalls safely
+
+![Bad release stuck in ImagePullBackOff while 3 pods keep serving](images/k8s-4-bad-release.png)
+
+`finveritas:1.2.0` was never built. Its pod is stuck in `ImagePullBackOff` and `rollout status`
+times out, but the Deployment still reports **3/3 available**: the broken version never got traffic.
+
+### 5 · Roll back — `kubectl rollout undo`
+
+![rollout history, rollout undo, rollout status and the restored pods](images/k8s-5-rollout-undo.png)
+
+`rollout undo` restores v1.1.0 and removes the broken pod. In `rollout history`, revision 2 comes
+back as revision 4, because Kubernetes re-uses the old ReplicaSet and gives it the newest number.
+The warning is expected; see [Day-to-day commands](#day-to-day-commands).
+
+### 6 · No downtime
+
+![Traffic client log: 1726 requests, 0 failed](images/k8s-6-zero-downtime.png)
+
+Across the rolling update, the failed release and the rollback: **1,726 requests over 348 s, 0 failed.**
+
+### The version in the app
+
+The version is also visible in the app itself, through the Service:
+
+| v1.0.0 | v1.1.0 |
+|---|---|
+| ![Login footer showing 1.0.0](images/k8s-before-v1.0.0.jpg) | ![Login footer showing 1.1.0](images/k8s-after-v1.1.0.jpg) |
+
+(The footer under the sign-in buttons reads `FINVERITAS · SECURE · EXPLAINABLE · AUDITABLE · <version>`.)
+
+### Scripted version
+
+[`demo-rollout.sh`](../deploy/k8s/demo-rollout.sh) runs the same sequence unattended. A separate
+run also finished with 0 failed requests (301 sent).
+
+<details>
+<summary>Transcript of <code>sh deploy/k8s/demo-rollout.sh</code></summary>
 
 ```text
 ==== 1. Deploy v1.0.0 (3 replicas) ====
@@ -111,22 +174,7 @@ t=  61s  requests=301  failed=0
 no failed requests
 ```
 
-What it shows:
-
-- **Rolling update (step 3):** pods were replaced one at a time; the old ReplicaSet scaled to 0
-  and the new one reached 3/3. The client saw no errors.
-- **Safety net (step 4):** the broken release never received traffic. Its pod failed
-  (`ErrImagePull`), so the rollout stopped and all 3 good pods stayed up.
-- **Rollback (step 5):** `kubectl rollout undo` scaled the v1.1.0 ReplicaSet back up. Revision 2
-  became revision 4: Kubernetes re-uses the old ReplicaSet and gives it the newest number.
-
-The version is also visible in the app itself, through the Service:
-
-| v1.0.0 | v1.1.0 |
-|---|---|
-| ![Login footer showing 1.0.0](images/k8s-before-v1.0.0.jpg) | ![Login footer showing 1.1.0](images/k8s-after-v1.1.0.jpg) |
-
-(The footer under the sign-in buttons reads `FINVERITAS · SECURE · EXPLAINABLE · AUDITABLE · <version>`.)
+</details>
 
 ---
 
@@ -218,5 +266,5 @@ To ship a new version, set `newTag` in `overlays/production/kustomization.yaml` 
 |-------|--------|
 | Both overlays | Accepted by the API server (`kubectl apply --dry-run=server`), with no Pod Security warnings |
 | Pods | 3/3 Ready, 0 restarts, uid 10001, writes to `/app` refused (read-only root), `/tmp` writable |
-| Rolling update / bad release / rollback | As in the transcript above; 301 requests, **0 failed** |
+| Rolling update / bad release / rollback | As in the screenshots above: 1,726 requests in the live session and 301 in the scripted run, **0 failed** |
 | UI | Footer showed `1.0.0` and `1.1.0` through the Service, matching the live revision |
