@@ -7,6 +7,7 @@ stays clean. Inside, code is grouped by the **user journey**, in execution order
 PBL-2/                          ← repo root
 ├── app.py                      ← ENTRY POINT / router (auth gate, sidebar nav, dispatch)
 ├── requirements.txt
+├── Dockerfile                  ← production image (built + deployed by .github/workflows/ci-cd.yml)
 ├── docs/                       ← all documentation
 ├── finveritas/                 ← ALL source code
 │   │

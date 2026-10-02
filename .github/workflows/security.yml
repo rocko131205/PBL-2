@@ -1,8 +1,10 @@
 name: security
 
+# Stage 1 of the delivery pipeline: ci-cd.yml calls this on every push and PR, so
+# these gates must pass before an image is built or deployed (see docs/CI_CD.md).
 on:
-  push:
-  pull_request:
+  workflow_call:
+  workflow_dispatch:
   schedule:
     - cron: "0 3 * * 1"   # weekly: catch newly published CVEs in unchanged dependencies
 
@@ -14,8 +16,8 @@ jobs:
     name: Unit + security regression tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -26,8 +28,8 @@ jobs:
     name: Static analysis (bandit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "bandit>=1.7"
@@ -38,8 +40,8 @@ jobs:
     name: Dependency vulnerabilities (pip-audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: pip install "pip-audit>=2.7"
@@ -49,9 +51,9 @@ jobs:
     name: Secret scanning (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # scan full history, not just the latest commit
-      - uses: gitleaks/gitleaks-action@v2
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

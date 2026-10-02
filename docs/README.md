@@ -124,6 +124,15 @@ See [SECURITY.md](../SECURITY.md) for the security assessment, threat model and 
 
 ---
 
+## Deployment
+
+Every push runs the GitHub Actions pipeline: lint, tests and security scans, then a Docker
+build that is smoke-tested and scanned with Trivy. Every commit to `main` is published to
+GitHub Container Registry and deployed to Render by image digest, then health-checked.
+See **[CI_CD.md](CI_CD.md)** for the pipeline diagram, stages and one-time setup.
+
+---
+
 ## Disclaimer
 
 FinVeritas is **decision support for a qualified analyst** — not a loan approval, rejection,

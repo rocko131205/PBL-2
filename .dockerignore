@@ -1,0 +1,26 @@
+# Keep the build context small and secret-free.
+# The Dockerfile copies explicit paths; this is defence in depth.
+
+# Secrets — NEVER send these to the Docker daemon
+.env
+.env.*
+.streamlit/secrets.toml
+
+# VCS / CI
+.git
+.github
+
+# Python / tooling
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.idea/
+.vscode/
+
+# Not needed at runtime
+tests/
+docs/
+redteam_results*.json
