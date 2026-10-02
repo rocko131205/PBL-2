@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: finveritas
+  labels:
+    # Reject any pod that doesn't meet the "restricted" Pod Security Standard
+    # (non-root, no privilege escalation, all capabilities dropped, seccomp on).
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest

@@ -1,0 +1,11 @@
+# Non-secret settings, injected as environment variables. Secrets live in finveritas-secrets.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: finveritas-config
+data:
+  MONGO_DB_NAME: finveritas
+  SMTP_HOST: smtp.gmail.com
+  SMTP_PORT: "587"
+  LLM_BASE_URL: https://generativelanguage.googleapis.com/v1beta/openai/
+  LLM_MODEL: gemini-3.5-flash

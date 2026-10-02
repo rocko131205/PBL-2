@@ -1,0 +1,10 @@
+# Node drains and other voluntary evictions must leave at least 2 pods serving.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: finveritas
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: finveritas

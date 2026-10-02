@@ -1,0 +1,91 @@
+# FinVeritas web app — 3 replicas behind the finveritas Service (service.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finveritas
+  labels:
+    app.kubernetes.io/name: finveritas
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5           # old ReplicaSets kept = versions you can roll back to
+  minReadySeconds: 5                # a new pod must stay Ready 5s before it counts as available
+  progressDeadlineSeconds: 120      # a rollout that stalls for 2 min is reported as failed
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: finveritas
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                   # add one new pod at a time…
+      maxUnavailable: 0             # …and never drop below 3 serving pods (zero downtime)
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: finveritas
+    spec:
+      automountServiceAccountToken: false   # the app never talks to the Kubernetes API
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001                    # "appuser" from the Dockerfile
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          image: finveritas                 # name + tag set per environment by overlays/
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8501
+          envFrom:
+            - configMapRef:
+                name: finveritas-config     # non-secret settings (configmap.yaml)
+            - secretRef:
+                name: finveritas-secrets    # JWT_SECRET, MONGO_URI, API keys (secret.example.yaml)
+          startupProbe:                     # allow up to 60s to boot before other probes start
+            httpGet:
+              path: /_stcore/health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:                   # only Ready pods receive traffic from the Service
+            httpGet:
+              path: /_stcore/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:                    # restart the container if it hangs
+            httpGet:
+              path: /_stcore/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          lifecycle:
+            preStop:                        # keep serving while the Service stops routing here
+              exec:
+                command: ["sleep", "5"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi                 # measured: ~50 MiB idle, ~170 MiB with a session
+            limits:
+              memory: 1Gi                   # headroom for PDF parsing / pandas
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:                     # the only writable paths
+            - name: tmp
+              mountPath: /tmp
+            - name: home
+              mountPath: /home/appuser
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: home
+          emptyDir:
+            sizeLimit: 64Mi

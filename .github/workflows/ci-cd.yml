@@ -58,10 +58,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Resolve image name
+      - name: Resolve image name and version
         id: name
         # GHCR requires lowercase repository names (rocko131205/PBL-2 → pbl-2).
-        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        # The version is shown in the app's footer: the release tag, or sha-<commit>.
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then version=$GITHUB_REF_NAME; else version="sha-${GITHUB_SHA::7}"; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Image tags & labels
         id: meta
@@ -82,6 +86,7 @@ jobs:
           context: .
           pull: true
           load: true      # into the local daemon: test and scan it before anything is pushed
+          build-args: APP_VERSION=${{ steps.name.outputs.version }}
           tags: |
             finveritas:ci
             ${{ steps.meta.outputs.tags }}

@@ -1,0 +1,19 @@
+# Stable in-cluster address for the app: http://finveritas (port 80) → pods on 8501.
+# Only Ready pods are endpoints, which is what makes rolling updates seamless.
+apiVersion: v1
+kind: Service
+metadata:
+  name: finveritas
+  labels:
+    app.kubernetes.io/name: finveritas
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: finveritas
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  # Streamlit uploads files over HTTP, then reads them from the user's WebSocket session.
+  # Both requests must reach the same pod, so each client sticks to one replica.
+  sessionAffinity: ClientIP

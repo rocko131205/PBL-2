@@ -86,6 +86,21 @@ def test_sidebar_sign_out_revokes_session(user):
     assert controller.decode_token(token) is None
 
 
+def test_login_footer_shows_escaped_app_version(user, monkeypatch):
+    monkeypatch.setenv("APP_VERSION", "1.1.0<script>")
+    at = _app()
+    footer = [m.value for m in at.markdown if "AUDITABLE" in m.value]
+    assert footer and "1.1.0&lt;script&gt;" in footer[0]
+    assert "<script>" not in footer[0]
+
+
+def test_login_footer_omits_version_when_unset(user, monkeypatch):
+    monkeypatch.delenv("APP_VERSION", raising=False)
+    at = _app()
+    footer = [m.value for m in at.markdown if "AUDITABLE" in m.value]
+    assert footer and footer[0].rstrip().endswith("AUDITABLE</p>")
+
+
 @pytest.mark.parametrize("missing", ["", "finveritas-change-this-secret"])
 def test_app_refuses_to_start_with_weak_secret(user, monkeypatch, missing):
     monkeypatch.setenv("JWT_SECRET", missing)

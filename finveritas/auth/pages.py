@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import os
 import re
 import streamlit as st
 import streamlit.components.v1 as components
@@ -449,10 +450,13 @@ def page_login() -> None:
             st.session_state["auth_page"] = "forgot"
             st.rerun()
 
+        # Build version baked into the container image (Dockerfile APP_VERSION) — unset when run locally.
+        _version = os.getenv("APP_VERSION", "")
+        _version_tag = f" · {html.escape(_version)}" if _version else ""
         st.markdown(
             '<p style="font-size:10px;color:#8A8A96;text-align:center;margin-top:32px;'
             'font-family:monospace;letter-spacing:0.14em;">'
-            'FINVERITAS · SECURE · EXPLAINABLE · AUDITABLE</p>',
+            f'FINVERITAS · SECURE · EXPLAINABLE · AUDITABLE{_version_tag}</p>',
             unsafe_allow_html=True,
         )
 

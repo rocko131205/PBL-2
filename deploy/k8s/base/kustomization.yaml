@@ -1,0 +1,15 @@
+# Shared manifests. Deploy through an overlay, which picks the image:
+#   kubectl apply -k deploy/k8s/overlays/local        (images built on this machine)
+#   kubectl apply -k deploy/k8s/overlays/production   (images published by ci-cd.yml)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: finveritas
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: finveritas
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - pdb.yaml

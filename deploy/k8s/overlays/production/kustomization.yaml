@@ -1,0 +1,19 @@
+# Real cluster, using the immutable image tags that ci-cd.yml publishes to GHCR.
+# The package is private, so create a pull secret first (see docs/KUBERNETES.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: finveritas
+    newName: ghcr.io/rocko131205/pbl-2
+    newTag: sha-6280d4b               # bump to ship a new version (any sha-* tag in GHCR)
+patches:
+  - target:
+      kind: Deployment
+      name: finveritas
+    patch: |-
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value:
+          - name: ghcr-pull

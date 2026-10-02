@@ -30,6 +30,11 @@ COPY .streamlit/config.toml ./.streamlit/config.toml
 COPY finveritas ./finveritas
 COPY scripts/make_admin.py ./scripts/make_admin.py
 
+# Shown in the login footer, so a rolling update is visible in the UI. Declared late so a
+# new version doesn't invalidate the dependency layers. CI passes the commit (sha-xxxxxxx).
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+
 USER appuser
 
 # Most PaaS hosts (Render, Railway, Cloud Run) inject $PORT; default to Streamlit's 8501.

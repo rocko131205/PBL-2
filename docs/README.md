@@ -135,6 +135,10 @@ To self-host on your own Ubuntu server instead, an Ansible playbook installs the
 creates the users, and manages the files and services. See
 **[CONFIG_MANAGEMENT.md](CONFIG_MANAGEMENT.md)**.
 
+On Kubernetes, the app runs as a 3-replica Deployment behind a Service, with zero-downtime
+rolling updates and one-command rollback. See **[KUBERNETES.md](KUBERNETES.md)** for the
+manifests and a recorded demonstration.
+
 ---
 
 ## Disclaimer

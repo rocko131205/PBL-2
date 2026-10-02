@@ -9,6 +9,7 @@ PBL-2/                          ← repo root
 ├── requirements.txt
 ├── Dockerfile                  ← production image (built + deployed by .github/workflows/ci-cd.yml)
 ├── deploy/ansible/             ← self-hosted runtime: site.yml playbook + inventory.ini
+├── deploy/k8s/                 ← Kubernetes: Deployment + Service (base/), overlays/, rollout demo
 ├── docs/                       ← all documentation
 ├── finveritas/                 ← ALL source code
 │   │
