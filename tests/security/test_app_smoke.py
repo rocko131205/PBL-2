@@ -106,3 +106,17 @@ def test_app_refuses_to_start_with_weak_secret(user, monkeypatch, missing):
     monkeypatch.setenv("JWT_SECRET", missing)
     at = _app()
     assert any("security configuration is incomplete" in e.value for e in at.error)
+
+
+def test_login_page_render_is_counted_despite_st_stop(user):
+    # The login page ends with st.stop(); after that every Streamlit call raises, so the
+    # page label must be recorded during the run, not read back afterwards.
+    from prometheus_client import REGISTRY
+
+    def renders():
+        return REGISTRY.get_sample_value("finveritas_page_renders_total", {"page": "login", "outcome": "ok"}) or 0.0
+
+    before = renders()
+    at = _app()
+    assert not at.exception
+    assert renders() == before + 1

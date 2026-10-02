@@ -1,0 +1,118 @@
+# FinVeritas monitoring stack — the app (+ MongoDB) behind an edge proxy, scraped by
+# Prometheus and shown on a provisioned Grafana dashboard. Guide: docs/MONITORING.md
+#
+#   cp .env.example .env                       # set JWT_SECRET and GRAFANA_ADMIN_PASSWORD
+#   docker compose up -d --build
+#   docker compose --profile load up -d        # optional: synthetic users generating traffic
+#
+# App http://localhost:8080 · Grafana http://localhost:3000 · Prometheus http://localhost:9090
+name: finveritas-monitoring
+
+services:
+  mongo:
+    image: mongo:8.0.32
+    volumes:
+      - mongo-data:/data/db
+
+  app:
+    build:
+      context: ../..
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+    image: finveritas:${APP_VERSION:-dev}
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in deploy/monitoring/.env}
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB_NAME: finveritas
+      METRICS_PORT: "9464"              # /metrics, reachable only on the compose network
+    depends_on: [mongo]
+    restart: unless-stopped
+
+  edge:                                 # what users reach; its metrics = HTTP latency + status codes
+    image: caddy:2.11.4-alpine
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on: [app]
+    restart: unless-stopped
+
+  blackbox:                             # checks the app from outside, like a user (uptime)
+    image: prom/blackbox-exporter:v0.28.0
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in deploy/monitoring/.env}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"           # local demo: view dashboards without logging in
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/finveritas.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+  # ── Optional synthetic traffic: docker compose --profile load up -d ─────────────
+  seed:                                 # creates the synthetic user's account (safe to re-run)
+    profiles: [load]
+    image: finveritas:${APP_VERSION:-dev}
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB_NAME: finveritas
+      SYNTHETIC_EMAIL: ${SYNTHETIC_EMAIL:-synthetic@finveritas.local}
+      SYNTHETIC_PASSWORD: ${SYNTHETIC_PASSWORD:?set SYNTHETIC_PASSWORD in deploy/monitoring/.env}
+    command:
+      - python
+      - -c
+      - |
+        import os
+        from finveritas.auth.controller import register_user
+        print(register_user("Synthetic User", os.environ["SYNTHETIC_EMAIL"], "+910000000000",
+                            "Maharashtra", "Pune", os.environ["SYNTHETIC_PASSWORD"]))
+    depends_on: [mongo]
+
+  synthetic:                            # headless-browser users signing in and clicking around
+    profiles: [load]
+    image: ghcr.io/puppeteer/puppeteer:25.12.0
+    environment:
+      TARGET_URL: http://edge:8080/
+      SYNTHETIC_EMAIL: ${SYNTHETIC_EMAIL:-synthetic@finveritas.local}
+      SYNTHETIC_PASSWORD: ${SYNTHETIC_PASSWORD}
+      SYNTHETIC_USERS: "2"
+      NODE_PATH: /home/pptruser/node_modules
+    volumes:
+      - ./synthetic/user.js:/home/pptruser/synthetic-user.js:ro
+    command: ["node", "/home/pptruser/synthetic-user.js"]
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      edge:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  prometheus-data:
+  grafana-data:

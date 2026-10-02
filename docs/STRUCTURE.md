@@ -10,8 +10,10 @@ PBL-2/                          ← repo root
 ├── Dockerfile                  ← production image (built + deployed by .github/workflows/ci-cd.yml)
 ├── deploy/ansible/             ← self-hosted runtime: site.yml playbook + inventory.ini
 ├── deploy/k8s/                 ← Kubernetes: Deployment + Service (base/), overlays/, rollout demo
+├── deploy/monitoring/          ← Prometheus + Grafana stack, dashboard JSON, alerts, synthetic users
 ├── docs/                       ← all documentation
 ├── finveritas/                 ← ALL source code
+│   ├── serve.py                container entry point: /metrics, then Streamlit
 │   │
 │   ├── auth/                   ── 1. LOGIN / SIGNUP (runs first) ──────────────
 │   │   ├── pages.py            login (+MFA step), register, forgot-password, history screens
@@ -62,6 +64,7 @@ PBL-2/                          ← repo root
 │       ├── currency.py         FX normalization to a base currency
 │       ├── meanings.py         one-line plain-English meaning per metric
 │       ├── components.py       reusable Streamlit UI components
+│       ├── metrics.py          Prometheus metrics (page renders, logins, build info)
 │       └── styles.css          the design system
 │
 ├── scripts/                    llm_redteam.py (live injection test), make_admin.py

@@ -96,7 +96,7 @@ jobs:
 
       - name: Smoke-test container
         run: |
-          docker run -d --name app -p 8501:8501 -e JWT_SECRET="$(openssl rand -hex 32)" finveritas:ci
+          docker run -d --name app -p 8501:8501 -p 9464:9464 -e JWT_SECRET="$(openssl rand -hex 32)" finveritas:ci
           healthy=""
           for _ in $(seq 1 30); do
             if curl -fs http://localhost:8501/_stcore/health | grep -qx ok; then healthy=1; break; fi
@@ -104,6 +104,8 @@ jobs:
           done
           if [ -z "$healthy" ]; then docker logs app; echo "::error::Container never became healthy"; exit 1; fi
           curl -fsS -o /dev/null http://localhost:8501/      # UI shell is served
+          metrics=$(curl -fsS http://localhost:9464/metrics) # Prometheus endpoint is up from boot
+          grep -q '^finveritas_build_info{version=' <<< "$metrics" || { echo "::error::/metrics is missing finveritas_build_info"; exit 1; }
           docker exec app python -c "import app"             # every module and dependency imports
           [ "$(docker exec app id -u)" != "0" ] || { echo "::error::Container runs as root"; exit 1; }
           docker exec app sh -c '! test -e /app/.env' || { echo "::error::.env was baked into the image"; exit 1; }

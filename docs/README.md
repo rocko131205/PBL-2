@@ -139,6 +139,10 @@ On Kubernetes, the app runs as a 3-replica Deployment behind a Service, with zer
 rolling updates and one-command rollback. See **[KUBERNETES.md](KUBERNETES.md)** for the
 manifests and a recorded demonstration.
 
+For monitoring, the app exposes Prometheus metrics, and a Compose stack (Prometheus, Grafana,
+blackbox exporter, edge proxy) feeds a dashboard of uptime, latency and error rate. See
+**[MONITORING.md](MONITORING.md)**.
+
 ---
 
 ## Disclaimer

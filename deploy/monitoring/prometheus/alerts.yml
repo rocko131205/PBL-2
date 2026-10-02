@@ -1,0 +1,39 @@
+groups:
+  - name: finveritas
+    rules:
+      - alert: FinVeritasDown
+        expr: probe_success{job="uptime"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: FinVeritas is not answering its health check through the edge.
+
+      - alert: HighHttpErrorRate
+        expr: |
+          sum(rate(caddy_http_request_duration_seconds_count{code=~"5.."}[1m]))
+            / sum(rate(caddy_http_request_duration_seconds_count{code!="101"}[1m])) > 0.05
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5% of HTTP requests are failing with 5xx.
+
+      - alert: HighPageErrorRate
+        expr: |
+          sum(rate(finveritas_page_renders_total{outcome="error"}[1m]))
+            / sum(rate(finveritas_page_renders_total[1m])) > 0.05
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 5% of page renders are raising errors.
+
+      - alert: SlowPages
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(finveritas_page_render_seconds_bucket[2m]))) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: 95th-percentile page render time is above 2 seconds.

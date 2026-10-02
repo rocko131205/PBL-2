@@ -1,0 +1,36 @@
+global:
+  scrape_interval: 5s          # short interval so a demo shows detail within minutes
+  evaluation_interval: 5s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  # The app's own metrics: page-render latency/errors, logins, build info, process stats.
+  - job_name: finveritas
+    static_configs:
+      - targets: ["app:9464"]
+
+  # Edge proxy: every HTTP request users make — latency and status codes.
+  - job_name: edge
+    static_configs:
+      - targets: ["edge:9180"]
+
+  # Uptime: blackbox exporter GETs the health endpoint through the edge.
+  - job_name: uptime
+    metrics_path: /probe
+    params:
+      module: [http_health]
+    static_configs:
+      - targets: ["http://edge:8080/_stcore/health"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

@@ -1,0 +1,15 @@
+# Edge proxy in front of the app. Every user request passes through here, so its
+# metrics give HTTP latency and status codes (incl. 502s when the app is down).
+{
+	admin off
+	metrics
+}
+
+:8080 {
+	reverse_proxy app:8501
+}
+
+# Prometheus scrape endpoint — compose network only (not published).
+:9180 {
+	metrics /metrics
+}

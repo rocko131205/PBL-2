@@ -29,6 +29,7 @@ dnspython>=2.4          # Required for MongoDB Atlas SRV connection strings
 pyotp>=2.9              # TOTP two-factor authentication
 qrcode[pil]>=7.4        # QR codes for authenticator enrolment
 cryptography>=42.0      # Fernet encryption of MFA secrets at rest
+prometheus-client>=0.20 # /metrics endpoint for Prometheus (finveritas/shared/metrics.py)
 langgraph>=0.1
 pydantic>=2.0
 langchain-core>=0.2

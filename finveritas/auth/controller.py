@@ -32,6 +32,7 @@ from pymongo.errors import DuplicateKeyError
 from finveritas.auth.db import get_password_resets, get_users, make_user_doc
 from finveritas.security import audit, config, mfa, ratelimit, sessions
 from finveritas.security.passwords import password_issues
+from finveritas.shared.metrics import LOGINS
 
 load_dotenv()
 
@@ -125,6 +126,7 @@ def login_user(email: str, password: str) -> tuple[bool, str | dict]:
     if ratelimit.is_limited(key, config.LOGIN_MAX_FAILURES, config.LOGIN_WINDOW_MINUTES):
         wait = ratelimit.retry_after_minutes(key, config.LOGIN_WINDOW_MINUTES)
         audit.log_event(audit.LOGIN_LOCKED, email=email)
+        LOGINS.labels(result="locked").inc()
         return False, f"Too many failed attempts. Try again in {wait} minute(s)."
 
     user = get_users().find_one({"email": email})
@@ -132,17 +134,21 @@ def login_user(email: str, password: str) -> tuple[bool, str | dict]:
         _burn_bcrypt_time(password)
         ratelimit.record(key, config.LOGIN_WINDOW_MINUTES)
         audit.log_event(audit.LOGIN_FAILURE, email=email, detail={"reason": "unknown_email"})
+        LOGINS.labels(result="failure").inc()
         return False, GENERIC_LOGIN_ERROR
 
     if not bcrypt.checkpw(password.encode()[:72], user["password_hash"].encode()):
         ratelimit.record(key, config.LOGIN_WINDOW_MINUTES)
         audit.log_event(audit.LOGIN_FAILURE, email=email, user_id=str(user["_id"]),
                         detail={"reason": "bad_password"})
+        LOGINS.labels(result="failure").inc()
         return False, GENERIC_LOGIN_ERROR
 
     if user.get("mfa_enabled"):
+        LOGINS.labels(result="mfa_required").inc()
         return True, {"mfa_required": True, "user_id": str(user["_id"])}
 
+    LOGINS.labels(result="success").inc()
     return True, _finish_login(user)
 
 

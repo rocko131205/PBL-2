@@ -45,6 +45,7 @@ from finveritas.auth.pages import page_login, page_register, page_forgot_passwor
 from finveritas.auth.security_pages import page_security_settings, page_security_dashboard
 from finveritas.security.config import validate_startup
 from finveritas.auth.db import get_file_history, make_history_doc
+from finveritas.shared.metrics import set_render_page, start_metrics_server, track_page_render
 
 import os
 from dotenv import load_dotenv
@@ -70,6 +71,7 @@ def main() -> None:
         initial_sidebar_state="expanded",
     )
     load_css()
+    start_metrics_server()  # no-op if already started by finveritas.serve, or if METRICS_PORT is unset
 
     import time
 
@@ -115,6 +117,7 @@ def main() -> None:
     if not user:
         # Show correct auth sub-page
         auth_page = st.session_state.get("auth_page", "login")
+        set_render_page(auth_page)
         if auth_page == "register":
             page_register()
         elif auth_page == "forgot":
@@ -173,6 +176,7 @@ def main() -> None:
             label_visibility="collapsed",
             key="sidebar_nav",
         )
+        set_render_page(page)
 
         render_hr()
         st.markdown('<div class="bb-nav-label" style="margin-top:8px;">Display</div>', unsafe_allow_html=True)
@@ -237,5 +241,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    with track_page_render():
+        main()
 

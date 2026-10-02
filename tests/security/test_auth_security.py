@@ -182,3 +182,15 @@ def test_new_users_are_not_admins_and_role_is_read_from_db(user, mongo):
     assert controller.is_admin(uid)
     mongo.users.update_one({"_id": user["_id"]}, {"$set": {"role": "analyst"}})
     assert not controller.is_admin(uid)  # demotion applies immediately
+
+
+def test_login_results_are_counted_in_metrics(user):
+    from prometheus_client import REGISTRY
+
+    def count(result):
+        return REGISTRY.get_sample_value("finveritas_logins_total", {"result": result}) or 0.0
+
+    ok, fail = count("success"), count("failure")
+    assert controller.login_user("alice@example.com", "Wrong!Passw0rd")[0] is False
+    assert controller.login_user("alice@example.com", STRONG_PASSWORD)[0] is True
+    assert (count("failure"), count("success")) == (fail + 1, ok + 1)

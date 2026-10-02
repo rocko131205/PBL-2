@@ -1,0 +1,9 @@
+# Uptime check: GET the health endpoint through the edge, exactly as a user's browser would.
+modules:
+  http_health:
+    prober: http
+    timeout: 5s
+    http:
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200]
+      fail_if_body_not_matches_regexp: ["^ok$"]

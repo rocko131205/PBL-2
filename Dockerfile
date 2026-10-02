@@ -41,7 +41,12 @@ USER appuser
 ENV PORT=8501
 EXPOSE 8501
 
+# Prometheus metrics on a separate, internal-only port (finveritas/shared/metrics.py).
+ENV METRICS_PORT=9464
+EXPOSE 9464
+
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/_stcore/health', timeout=4)"
 
-CMD ["sh", "-c", "exec streamlit run app.py --server.port=${PORT} --server.address=0.0.0.0 --server.headless=true --server.fileWatcherType=none"]
+# Starts /metrics (METRICS_PORT) from boot, then Streamlit on $PORT in the same process.
+CMD ["python", "-m", "finveritas.serve"]
