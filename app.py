@@ -43,6 +43,7 @@ from finveritas.shared.components import (
 from finveritas.auth.controller import decode_token
 from finveritas.auth.pages import page_login, page_register, page_forgot_password, page_history
 from finveritas.auth.db import get_file_history, make_history_doc
+from finveritas.shared.metrics import track_page_run
 
 import os
 from dotenv import load_dotenv
@@ -214,5 +215,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    with track_page_run():  # counts and times this run for Prometheus
+        main()
 

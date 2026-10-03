@@ -9,6 +9,7 @@ PBL-2/                          ← repo root
 ├── requirements.txt
 ├── docs/                       ← all documentation
 ├── finveritas/                 ← ALL source code
+│   ├── serve.py                Docker entry point: starts /metrics, then Streamlit
 │   │
 │   ├── auth/                   ── 1. LOGIN / SIGNUP (runs first) ──────────────
 │   │   ├── pages.py            login, register, forgot-password, history screens
@@ -48,9 +49,10 @@ PBL-2/                          ← repo root
 │       ├── currency.py         FX normalization to a base currency
 │       ├── meanings.py         one-line plain-English meaning per metric
 │       ├── components.py       reusable Streamlit UI components
+│       ├── metrics.py          Prometheus metrics: counts and times every page run
 │       └── styles.css          the design system
 │
-└── tests/                      153 tests (pytest)
+└── tests/                      154 tests (pytest)
 ```
 
 ## Execution flow

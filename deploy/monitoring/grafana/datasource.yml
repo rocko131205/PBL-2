@@ -1,0 +1,8 @@
+# Tells Grafana where Prometheus is, so the dashboard can query it.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    url: http://prometheus:9090
+    isDefault: true

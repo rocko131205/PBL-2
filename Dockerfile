@@ -14,7 +14,8 @@ COPY . .
 RUN useradd --create-home app
 USER app
 
-# Render and most other hosts set $PORT; locally it falls back to Streamlit's 8501.
-# `exec` hands over to Streamlit, so it receives the stop signal and shuts down at once.
-EXPOSE 8501
-CMD ["sh", "-c", "exec streamlit run app.py --server.address=0.0.0.0 --server.port=${PORT:-8501}"]
+# Starts the /metrics endpoint for Prometheus on 9464, then Streamlit on $PORT (Render and
+# most other hosts set it; otherwise 8501). Python runs as the main process, so it receives
+# the stop signal and Streamlit shuts down at once.
+EXPOSE 8501 9464
+CMD ["python", "-m", "finveritas.serve"]

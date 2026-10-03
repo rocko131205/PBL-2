@@ -34,7 +34,7 @@ If a job fails, the jobs after it don't run, so code that fails its tests is nev
 
 | Job | Steps | Runs on |
 |-----|-------|---------|
-| **1 · Test** | Install dependencies → lint with `ruff` (syntax errors and undefined names only) → run the test suite with `pytest` (153 tests) | Every push and pull request |
+| **1 · Test** | Install dependencies → lint with `ruff` (syntax errors and undefined names only) → run the test suite with `pytest` (154 tests) | Every push and pull request |
 | **2 · Build** | `docker build` the image, tagged `sha-<commit>` and `latest`. On `main`, log in to GitHub Container Registry (GHCR) and `docker push` it to `ghcr.io/rocko131205/pbl-2` | Every push and pull request (push to GHCR: `main` only) |
 | **3 · Deploy** | Call Render's deploy hook. Render pulls the new `:latest` image and restarts the app | `main` only |
 

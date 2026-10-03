@@ -30,5 +30,8 @@ langgraph>=0.1
 pydantic>=2.0
 langchain-core>=0.2
 
+# ── Monitoring ──────────────────────────────────────────────────────────────
+prometheus-client>=0.20 # /metrics endpoint for Prometheus (finveritas/serve.py)
+
 # ── Testing ─────────────────────────────────────────────────────────────────
 pytest>=8.0

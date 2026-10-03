@@ -1,0 +1,7 @@
+# Loads every dashboard JSON file in this folder into Grafana at startup.
+apiVersion: 1
+providers:
+  - name: finveritas
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

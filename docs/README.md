@@ -58,7 +58,7 @@ system evolved (V1 → V2 → V3), see **[VERSION_HISTORY.md](VERSION_HISTORY.md
 | **Currency-correct** | FX-normalizable; INR shows in lakh/crore, others in K/M/B/T; reported-unit rescaling |
 | **Guardrailed AI** | Any OpenAI-compatible endpoint (Groq, LM Studio, Ollama, OpenAI); explains, never calculates |
 | **Auth** | MongoDB users, bcrypt, JWT sessions, email OTP |
-| **Tested** | 153 pytest tests |
+| **Tested** | 154 pytest tests |
 
 ---
 
@@ -74,7 +74,8 @@ streamlit run app.py                                    # open http://localhost:
 
 To set up a Linux server instead, use the Ansible playbook
 [`deploy/ansible/site.yml`](../deploy/ansible/site.yml); the command to run it is at the top
-of the file. To run it on Kubernetes, see **[KUBERNETES.md](KUBERNETES.md)**.
+of the file. To run it on Kubernetes, see **[KUBERNETES.md](KUBERNETES.md)**; for the
+Prometheus + Grafana monitoring, see **[MONITORING.md](MONITORING.md)**.
 
 ### Environment variables (`.env` in the repo root)
 
@@ -119,7 +120,7 @@ numbers work regardless.
 ## Testing
 
 ```sh
-pytest            # 153 tests
+pytest            # 154 tests
 ```
 
 The tests also run on every push in GitHub Actions; see **[CI_CD.md](CI_CD.md)**.
