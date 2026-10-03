@@ -72,6 +72,10 @@ pip install -r requirements.txt
 streamlit run app.py                                    # open http://localhost:8501
 ```
 
+To set up a Linux server instead, use the Ansible playbook
+[`deploy/ansible/site.yml`](../deploy/ansible/site.yml); the command to run it is at the top
+of the file.
+
 ### Environment variables (`.env` in the repo root)
 
 ```env
