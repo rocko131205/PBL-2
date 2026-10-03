@@ -1,5 +1,5 @@
 # FinVeritas — production image.
-# Built, smoke-tested, scanned and published by .github/workflows/ci-cd.yml.
+# Built and published by .github/workflows/ci-cd.yml.
 # Secrets (JWT_SECRET, MONGO_URI, LLM_API_KEY, …) are injected at runtime by the
 # hosting platform — never baked into the image.
 
@@ -12,8 +12,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Pick up Debian security fixes newer than the base image (the Trivy gate in CI
-# fails on fixable HIGH/CRITICAL CVEs).
+# Pick up Debian security fixes newer than the base image.
 RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*

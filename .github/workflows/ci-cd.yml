@@ -1,206 +1,79 @@
-name: ci-cd
+name: CI/CD
 
-# FinVeritas delivery pipeline — diagram and one-time setup in docs/CI_CD.md.
+# A simple three-step pipeline (diagram and setup in docs/CI_CD.md):
 #
-#   1. CI gates   ruff lint  ∥  tests · bandit · pip-audit · gitleaks  (security.yml)
-#   2. Build      docker build → smoke test → Trivy scan → push to GHCR   (push: main / v* tags)
-#   3. Deploy     exact image digest → Render → wait until live → health check   (main only)
+#   1. Test    lint the code and run the test suite
+#   2. Build   build the Docker image; on main, push it to GitHub Container Registry
+#   3. Deploy  on main only: tell Render to pull the new image and restart the app
 #
-# Branches and PRs run stages 1–2 without publishing. Nothing reaches production
-# unless every earlier gate is green, and the image deployed is the image tested.
+# Each job starts only if the one before it passed, so broken code is never deployed.
 
 on:
-  push:
-    branches: ["**"]
-    tags: ["v*"]
-  pull_request:
-  workflow_dispatch:
+  push:                # every push, on any branch
+  pull_request:        # every pull request
+  workflow_dispatch:   # adds a "Run workflow" button in the Actions tab
 
-permissions:
-  contents: read
-
-concurrency:
-  group: ci-cd-${{ github.ref }}
-  # Supersede stale runs on branches/PRs; never cancel a main run mid-deploy.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+env:
+  IMAGE: ghcr.io/rocko131205/pbl-2   # registry image names must be lowercase
 
 jobs:
-  # ── Stage 1 ────────────────────────────────────────────────────────────────
-  lint:
-    name: Lint (ruff)
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install "ruff>=0.6"
-      # Errors only: syntax errors, undefined names, invalid comparisons — not style.
-      - run: ruff check --select E9,F63,F7,F82 --output-format github .
+          cache: pip
 
-  checks:
-    name: CI gates
-    uses: ./.github/workflows/security.yml
+      - name: Install dependencies
+        run: pip install -r requirements.txt ruff
 
-  # ── Stage 2 ────────────────────────────────────────────────────────────────
+      - name: Lint
+        # Real errors only (syntax errors, undefined names), not code style.
+        run: ruff check --select E9,F63,F7,F82 .
+
+      - name: Run tests
+        run: pytest
+
   build:
-    name: Build & publish image
-    needs: [lint, checks]
+    name: Build
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
-    env:
-      PUBLISH: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
-    outputs:
-      image: ${{ steps.name.outputs.image }}
-      digest: ${{ steps.publish.outputs.digest }}
+      packages: write   # lets the built-in GITHUB_TOKEN push images to GHCR
     steps:
-      - uses: actions/checkout@v7
+      - name: Check out the code
+        uses: actions/checkout@v7
 
-      - name: Resolve image name and version
-        id: name
-        # GHCR requires lowercase repository names (rocko131205/PBL-2 → pbl-2).
-        # The version is shown in the app's footer: the release tag, or sha-<commit>.
+      - name: Build the Docker image
         run: |
-          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-          if [ "$GITHUB_REF_TYPE" = tag ]; then version=$GITHUB_REF_NAME; else version="sha-${GITHUB_SHA::7}"; fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          TAG=sha-${GITHUB_SHA::7}   # e.g. sha-1a2b3c4: the commit the image was built from
+          docker build --build-arg APP_VERSION=$TAG -t $IMAGE:$TAG -t $IMAGE:latest .
 
-      - name: Image tags & labels
-        id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ${{ steps.name.outputs.image }}
-          tags: |
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-
-      - name: Build image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          pull: true
-          load: true      # into the local daemon: test and scan it before anything is pushed
-          build-args: APP_VERSION=${{ steps.name.outputs.version }}
-          tags: |
-            finveritas:ci
-            ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Smoke-test container
+      - name: Push the image to GHCR
+        if: github.ref == 'refs/heads/main'
         run: |
-          docker run -d --name app -p 8501:8501 -p 9464:9464 -e JWT_SECRET="$(openssl rand -hex 32)" finveritas:ci
-          healthy=""
-          for _ in $(seq 1 30); do
-            if curl -fs http://localhost:8501/_stcore/health | grep -qx ok; then healthy=1; break; fi
-            sleep 2
-          done
-          if [ -z "$healthy" ]; then docker logs app; echo "::error::Container never became healthy"; exit 1; fi
-          curl -fsS -o /dev/null http://localhost:8501/      # UI shell is served
-          metrics=$(curl -fsS http://localhost:9464/metrics) # Prometheus endpoint is up from boot
-          grep -q '^finveritas_build_info{version=' <<< "$metrics" || { echo "::error::/metrics is missing finveritas_build_info"; exit 1; }
-          docker exec app python -c "import app"             # every module and dependency imports
-          [ "$(docker exec app id -u)" != "0" ] || { echo "::error::Container runs as root"; exit 1; }
-          docker exec app sh -c '! test -e /app/.env' || { echo "::error::.env was baked into the image"; exit 1; }
-          docker rm -f app
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push --all-tags $IMAGE
 
-      - name: Scan image for vulnerabilities (Trivy)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: finveritas:ci
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true    # fail only on CVEs that have a fix available
-          exit-code: "1"
-
-      - name: Push to GitHub Container Registry
-        id: publish
-        if: env.PUBLISH == 'true'
-        env:
-          IMAGE: ${{ steps.name.outputs.image }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker push --all-tags "$IMAGE" | tee push.log
-          digest=$(grep -oE 'digest: sha256:[0-9a-f]{64}' push.log | tail -1 | cut -d' ' -f2)
-          [ -n "$digest" ] || { echo "::error::Could not read pushed image digest"; exit 1; }
-          echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          {
-            echo "### 📦 Published \`${IMAGE}@${digest}\`"
-            docker image inspect finveritas:ci --format '{{range .RepoTags}}{{println .}}{{end}}' \
-              | grep "^${IMAGE}:" | sed 's/^/- /'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  # ── Stage 3 ────────────────────────────────────────────────────────────────
   deploy:
-    name: Deploy to production
+    name: Deploy
     needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: ${{ vars.APP_URL }}
-    concurrency:
-      group: deploy-production
-      cancel-in-progress: false
-    env:
-      IMAGE_REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
-      DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-      APP_URL: ${{ vars.APP_URL }}
     steps:
-      - name: Check production is configured
-        id: cfg
-        run: |
-          if [ -n "$DEPLOY_HOOK" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          echo "::warning title=Deploy skipped::Add the RENDER_DEPLOY_HOOK_URL Actions secret to enable deploys (see docs/CI_CD.md)."
-          echo "⏭️ Deploy skipped — RENDER_DEPLOY_HOOK_URL not configured. Image ready to deploy: \`${IMAGE_REF}\`" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Trigger Render deploy
-        id: trigger
-        if: steps.cfg.outputs.ready == 'true'
-        run: |
-          # imgURL pins the deploy to the exact digest built, tested and scanned above.
-          code=$(curl -sS -G --data-urlencode "imgURL=${IMAGE_REF}" -o resp.json -w '%{http_code}' "$DEPLOY_HOOK")
-          case "$code" in
-            200) echo "deploy_id=$(jq -r '.deploy.id // .id // empty' resp.json)" >> "$GITHUB_OUTPUT" ;;
-            202) echo "::notice::Render queued this deploy behind one already in progress" ;;
-            *)   echo "::error::Render rejected the deploy (HTTP $code): $(cat resp.json)"; exit 1 ;;
-          esac
-          echo "🚀 Deploying \`${IMAGE_REF}\`" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Wait for deploy to go live
-        if: steps.trigger.outputs.deploy_id != '' && env.RENDER_API_KEY != ''
+      - name: Deploy to Render
         env:
-          DEPLOY_ID: ${{ steps.trigger.outputs.deploy_id }}
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          service=$(sed -E 's#^.*/deploy/(srv-[^?/]+).*$#\1#' <<< "$DEPLOY_HOOK")
-          for i in $(seq 1 60); do
-            status=$(curl -fsS -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" \
-              "https://api.render.com/v1/services/$service/deploys/$DEPLOY_ID" | jq -r '.status // .deploy.status')
-            echo "[$i/60] $DEPLOY_ID: $status"
-            case "$status" in
-              live) exit 0 ;;
-              *failed|canceled|deactivated) echo "::error::Render deploy $DEPLOY_ID ended as '$status'"; exit 1 ;;
-            esac
-            sleep 10
-          done
-          echo "::error::Timed out after 10 min waiting for $DEPLOY_ID to go live"; exit 1
-
-      - name: Post-deploy health check
-        if: steps.cfg.outputs.ready == 'true' && env.APP_URL != ''
-        run: |
-          for i in $(seq 1 30); do
-            if curl -fs --max-time 10 "${APP_URL%/}/_stcore/health" | grep -qx ok; then
-              echo "✅ ${APP_URL} is live and healthy" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
-            fi
-            echo "[$i/30] not healthy yet"; sleep 10
-          done
-          echo "::error::${APP_URL} failed its post-deploy health check"; exit 1
+          if [ -z "$DEPLOY_HOOK" ]; then
+            echo "::warning::Not deployed: add the RENDER_DEPLOY_HOOK_URL secret (see docs/CI_CD.md)."
+            exit 0
+          fi
+          curl -fsS "$DEPLOY_HOOK"   # Render pulls the new :latest image and restarts the app

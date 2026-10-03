@@ -126,10 +126,9 @@ See [SECURITY.md](../SECURITY.md) for the security assessment, threat model and 
 
 ## Deployment
 
-Every push runs the GitHub Actions pipeline: lint, tests and security scans, then a Docker
-build that is smoke-tested and scanned with Trivy. Every commit to `main` is published to
-GitHub Container Registry and deployed to Render by image digest, then health-checked.
-See **[CI_CD.md](CI_CD.md)** for the pipeline diagram, stages and one-time setup.
+Every push runs a simple GitHub Actions pipeline: **test** (lint + pytest) → **build** (Docker
+image) → **deploy**. Commits to `main` are pushed to GitHub Container Registry and deployed to
+Render. See **[CI_CD.md](CI_CD.md)** for the pipeline diagram and the one-time setup.
 
 To self-host on your own Ubuntu server instead, an Ansible playbook installs the packages,
 creates the users, and manages the files and services. See
