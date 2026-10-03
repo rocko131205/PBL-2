@@ -1,0 +1,79 @@
+name: CI/CD
+
+# A simple three-step pipeline (diagram and setup in docs/CI_CD.md):
+#
+#   1. Test    lint the code and run the test suite
+#   2. Build   build the Docker image; on main, push it to GitHub Container Registry
+#   3. Deploy  on main only: tell Render to pull the new image and restart the app
+#
+# Each job starts only if the one before it passed, so broken code is never deployed.
+
+on:
+  push:                # every push, on any branch
+  pull_request:        # every pull request
+  workflow_dispatch:   # adds a "Run workflow" button in the Actions tab
+
+env:
+  IMAGE: ghcr.io/rocko131205/pbl-2   # registry image names must be lowercase
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt ruff
+
+      - name: Lint
+        # Real errors only (syntax errors, undefined names), not code style.
+        run: ruff check --select E9,F63,F7,F82 .
+
+      - name: Run tests
+        run: pytest
+
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write   # lets the built-in GITHUB_TOKEN push images to GHCR
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Build the Docker image
+        run: |
+          TAG=sha-${GITHUB_SHA::7}   # e.g. sha-1a2b3c4: the commit the image was built from
+          docker build -t $IMAGE:$TAG -t $IMAGE:latest .
+
+      - name: Push the image to GHCR
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push --all-tags $IMAGE
+
+  deploy:
+    name: Deploy
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Render
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK" ]; then
+            echo "::warning::Not deployed: add the RENDER_DEPLOY_HOOK_URL secret (see docs/CI_CD.md)."
+            exit 0
+          fi
+          curl -fsS "$DEPLOY_HOOK"   # Render pulls the new :latest image and restarts the app

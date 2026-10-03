@@ -1,0 +1,8 @@
+# Kept out of the Docker image. .env files hold secrets: never bake them in.
+**/.env
+.git
+.venv
+**/__pycache__
+tests
+docs
+.*_cache

@@ -118,6 +118,8 @@ numbers work regardless.
 pytest            # 153 tests
 ```
 
+The tests also run on every push in GitHub Actions; see **[CI_CD.md](CI_CD.md)**.
+
 ---
 
 ## Disclaimer
