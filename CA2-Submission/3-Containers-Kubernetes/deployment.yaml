@@ -1,0 +1,35 @@
+# Runs 2 copies (pods) of the FinVeritas image. When the image changes, the pods are
+# replaced one at a time (a rolling update), so the app stays up the whole time.
+# How to run it and the rollout demo: docs/KUBERNETES.md
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finveritas
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: finveritas            # the pods this Deployment looks after
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1                # start 1 new pod at a time...
+      maxUnavailable: 0          # ...and remove an old one only after the new one is ready
+  template:                      # the blueprint for each pod
+    metadata:
+      labels:
+        app: finveritas
+    spec:
+      containers:
+        - name: finveritas
+          image: finveritas:v1
+          ports:
+            - containerPort: 8501
+          envFrom:
+            - secretRef:
+                name: finveritas-env   # your .env: kubectl create secret generic finveritas-env --from-env-file=.env
+                optional: true         # the app starts without it, but logging in needs it
+          readinessProbe:              # a pod gets traffic only once this check passes
+            httpGet:
+              path: /_stcore/health
+              port: 8501

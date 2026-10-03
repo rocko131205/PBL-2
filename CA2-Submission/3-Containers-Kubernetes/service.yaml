@@ -1,0 +1,12 @@
+# One stable address for the app. It sends port 80 to port 8501 on the FinVeritas pods,
+# but only to pods that are ready, so users never reach one that is starting or stopping.
+apiVersion: v1
+kind: Service
+metadata:
+  name: finveritas
+spec:
+  selector:
+    app: finveritas
+  ports:
+    - port: 80
+      targetPort: 8501

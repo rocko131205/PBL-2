@@ -1,0 +1,91 @@
+# FinVeritas runtime: sets up a fresh Ubuntu 24.04 server and starts the app on port 8501.
+# Run it from the repo root (on Linux, macOS or WSL, after `pip install ansible-core`):
+#
+#   ansible-playbook -i deploy/ansible/inventory.ini deploy/ansible/site.yml
+#
+# It copies your local .env (the app's secrets) to the server, so create that first.
+# Safe to re-run: steps that are already done are skipped, and the app restarts only
+# when its code, libraries, secrets or service file changed.
+
+- name: Set up the FinVeritas runtime
+  hosts: finveritas
+  become: true   # run every step with sudo
+
+  tasks:
+    # 1. Install packages
+    - name: Install Python
+      ansible.builtin.apt:
+        name:
+          - python3
+          - python3-venv
+          - python3-packaging   # needed by the pip step below
+        update_cache: true
+
+    # 2. Create users
+    - name: Create the user that runs the app (a service account nobody can log in as)
+      ansible.builtin.user:
+        name: finveritas
+        system: true
+        shell: /usr/sbin/nologin
+        home: /opt/finveritas
+
+    # 3. Manage files
+    - name: Copy the app code
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../{{ item }}"
+        dest: /opt/finveritas/
+        mode: "0644"   # owned by root: the app can read its code but not change it
+      loop:
+        - app.py
+        - requirements.txt
+        - finveritas
+      notify: Restart the app
+
+    - name: Copy the secrets file (.env), readable only by the app user
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../.env"
+        dest: /opt/finveritas/.env
+        owner: finveritas
+        mode: "0600"
+      diff: false   # never print the secrets
+      notify: Restart the app
+
+    - name: Install the Python libraries into a virtualenv
+      ansible.builtin.pip:
+        requirements: /opt/finveritas/requirements.txt
+        virtualenv: /opt/finveritas/venv
+        virtualenv_command: python3 -m venv
+      notify: Restart the app
+
+    - name: Create the systemd service that runs the app
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/finveritas.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=FinVeritas (Streamlit app)
+          After=network.target
+
+          [Service]
+          User=finveritas
+          WorkingDirectory=/opt/finveritas
+          ExecStart=/opt/finveritas/venv/bin/streamlit run app.py --server.address=0.0.0.0 --server.port=8501
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart the app
+
+    - name: Start the app now and on every boot
+      ansible.builtin.systemd:
+        name: finveritas
+        state: started
+        enabled: true
+        daemon_reload: true
+
+  handlers:
+    - name: Restart the app
+      ansible.builtin.systemd:
+        name: finveritas
+        state: restarted
+        daemon_reload: true

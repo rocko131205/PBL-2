@@ -1,0 +1,8 @@
+# Prometheus reads the app's /metrics every 5 seconds and stores the numbers over time.
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: finveritas
+    static_configs:
+      - targets: ["app:9464"]   # the "app" service from docker-compose.yml
