@@ -75,7 +75,8 @@ streamlit run app.py                                    # open http://localhost:
 To set up a Linux server instead, use the Ansible playbook
 [`deploy/ansible/site.yml`](../deploy/ansible/site.yml); the command to run it is at the top
 of the file. To run it on Kubernetes, see **[KUBERNETES.md](KUBERNETES.md)**; for the
-Prometheus + Grafana monitoring, see **[MONITORING.md](MONITORING.md)**.
+Prometheus + Grafana monitoring, see **[MONITORING.md](MONITORING.md)**. The CA2 reflection and
+report is **[REPORT.md](REPORT.md)** (also as [REPORT.pdf](REPORT.pdf)).
 
 ### Environment variables (`.env` in the repo root)
 
