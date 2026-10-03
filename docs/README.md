@@ -74,7 +74,7 @@ streamlit run app.py                                    # open http://localhost:
 
 To set up a Linux server instead, use the Ansible playbook
 [`deploy/ansible/site.yml`](../deploy/ansible/site.yml); the command to run it is at the top
-of the file.
+of the file. To run it on Kubernetes, see **[KUBERNETES.md](KUBERNETES.md)**.
 
 ### Environment variables (`.env` in the repo root)
 
