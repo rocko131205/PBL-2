@@ -4,7 +4,8 @@ name: ci-cd
 #
 #   1. CI gates   ruff lint  ∥  tests · bandit · pip-audit · gitleaks  (security.yml)
 #   2. Build      docker build → smoke test → Trivy scan → push to GHCR   (push: main / v* tags)
-#   3. Deploy     exact image digest → Render → wait until live → health check   (main only)
+#   3. Deploy     off on main: the Render service deploys the DevOps-CA2 branch, from that
+#                 branch's own pipeline (its .github/workflows/ci-cd.yml and docs/CI_CD.md)
 #
 # Branches and PRs run stages 1–2 without publishing. Nothing reaches production
 # unless every earlier gate is green, and the image deployed is the image tested.
@@ -135,7 +136,9 @@ jobs:
   deploy:
     name: Deploy to production
     needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    # Only DevOps-CA2 deploys. This file runs for pushes to main, so this job never runs here
+    # and main can't call the RENDER_DEPLOY_HOOK_URL that both branches share.
+    if: github.ref == 'refs/heads/DevOps-CA2' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: production
