@@ -791,5 +791,11 @@ def agent_tooltip_html(name: str, output: dict[str, Any] | None) -> str:
 # Divider
 # ─────────────────────────────────────────────────────────────────────────────
 
+SAAS_ONLY_NOTE = (
+    "FinVeritas is built for SaaS (software-as-a-service) companies only. Its metrics, thresholds "
+    "and Shock Lab assume recurring software revenue, so results for other businesses are not reliable."
+)
+
+
 def render_hr() -> None:
     st.markdown('<div class="bb-hr"></div>', unsafe_allow_html=True)

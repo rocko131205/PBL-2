@@ -28,6 +28,7 @@ from finveritas.ingestion.spreadsheet import load_private_company_data, get_temp
 from finveritas.ingestion.supplemental import auto_fetch_missing_fields
 from finveritas.ingestion.credibility import run_verification, CredibilityReport, STATUS_PASS, STATUS_WARN, STATUS_FAIL, STATUS_SKIP
 from finveritas.shared.components import (
+    SAAS_ONLY_NOTE,
     agent_tooltip_html,
     inject_theme_vars,
     load_css,
@@ -454,6 +455,7 @@ def page_upload(base_url: str, model: str, api_key: str, news_api_key: str = "",
         "Financial Data Ingestion",
         subtitle="Choose your data source: Bloomberg PDF · Listed Ticker · Private Company CSV",
     )
+    st.info(SAAS_ONLY_NOTE, icon="ℹ️")
 
     def _clear_all_caches():
         for k in ["cache_pdf", "cache_ticker", "cache_csv", "ocr_cache", "agent_outputs"]:

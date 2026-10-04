@@ -6,6 +6,10 @@
 > number computed deterministically in Python and the LLM used only to *explain*, never
 > to calculate.
 
+> **Note: FinVeritas works with SaaS (software-as-a-service) companies only.** Its metrics,
+> thresholds and Shock Lab assume recurring software revenue, so results for other
+> businesses are not reliable.
+
 ---
 
 ## The one rule
@@ -45,6 +49,10 @@ system evolved (V1 → V2 → V3), see **[VERSION_HISTORY.md](VERSION_HISTORY.md
 - **AI assistant** — "explain these results" + a scoped "ask about this company" chat,
   grounded strictly in the computed facts.
 - **Credit Memo** — a one-page lender memo, downloadable and printable to PDF.
+- **Shock Lab** — pick an economic shock (or describe one), watch it spread across
+  industries and countries to the borrower's customers, let customer / management /
+  competitor agents react quarter by quarter, and see the stressed DSCR, grade and PD band.
+  Inspired by MiroFish's swarm simulation; see [SHOCK_LAB_DESIGN.md](SHOCK_LAB_DESIGN.md).
 
 ---
 

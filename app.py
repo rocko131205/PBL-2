@@ -52,6 +52,7 @@ load_dotenv()
 
 from finveritas.ingestion.page import page_upload
 from finveritas.analysis.page import page_workflow, page_analysis, page_basel
+from finveritas.analysis.shock_page import page_shock_lab
 
 _DEFAULT_BASE_URL     = os.getenv("LLM_BASE_URL") or os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234/v1")
 _DEFAULT_MODEL        = os.getenv("LLM_MODEL", "qwen2.5-coder-1.5b-instruct-mlx")
@@ -137,7 +138,7 @@ def main() -> None:
                 <div class="bb-sidebar-brand-mark">FV</div>
                 <div>
                     <div class="bb-sidebar-logo-text">FinVeritas</div>
-                    <div class="bb-sidebar-logo-sub">Financial Analysis</div>
+                    <div class="bb-sidebar-logo-sub">SaaS Credit Analysis</div>
                 </div>
             </div>""", unsafe_allow_html=True)
 
@@ -146,6 +147,7 @@ def main() -> None:
         _nav_options = [
             "Upload Statement",
             "Financial Analysis",
+            "Shock Lab",
             "Agent Workflow",
             "Basel III Alignment",
             "My File History",
@@ -204,6 +206,8 @@ def main() -> None:
     if "Upload" in page:
         page_upload(base_url, model, api_key, news_api_key,
                     fmp_api_key=fmp_api_key, av_api_key=av_api_key)
+    elif "Shock" in page:
+        page_shock_lab()
     elif "Workflow" in page:
         page_workflow()
     elif "Analysis" in page:
