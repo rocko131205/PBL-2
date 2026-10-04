@@ -21,7 +21,8 @@ flowchart LR
     TEST --> BUILD["2 · Build<br/>docker build"]
     BUILD --> BRANCH{"DevOps-CA2<br/>branch?"}
     BRANCH -- no --> DONE(["✔ tested and built<br/>nothing deployed"])
-    BRANCH -- yes --> DEPLOY["3 · Deploy<br/>Render deploy hook"]
+    BRANCH -- yes --> GHCR["Push image to GHCR<br/>sha-1a2b3c4 · latest"]
+    GHCR --> DEPLOY["3 · Deploy<br/>Render deploy hook"]
     DEPLOY --> RENDER["Render rebuilds the commit<br/>waits for /_stcore/health"]
     RENDER --> LIVE(["✔ new version live"])
 ```
@@ -36,15 +37,14 @@ Render's own Auto-Deploy is **off**: the pipeline's Deploy job is the only thing
 | Job | Steps | Runs on |
 |-----|-------|---------|
 | **1 · Test** | Install dependencies → lint with `ruff` (syntax errors and undefined names only) → run the test suite with `pytest` (154 tests) | Every push and pull request |
-| **2 · Build** | `docker build` the image, tagged `sha-<commit>` and `latest`. On `main`, log in to GitHub Container Registry (GHCR) and `docker push` it to `ghcr.io/rocko131205/pbl-2` | Every push and pull request (push to GHCR: `main` only) |
+| **2 · Build** | `docker build` the image, tagged `sha-<commit>` and `latest`. On `DevOps-CA2`, log in to GitHub Container Registry (GHCR) and `docker push` it to `ghcr.io/rocko131205/pbl-2` | Every push and pull request (push to GHCR: `DevOps-CA2` only) |
 | **3 · Deploy** | Call Render's deploy hook. Render rebuilds the latest `DevOps-CA2` commit from the `Dockerfile` and switches traffic to it once `/_stcore/health` answers | `DevOps-CA2` only |
 
 | Event | Test | Build | Push to GHCR | Deploy |
 |-------|:---:|:---:|:---:|:---:|
-| Push to `DevOps-CA2` | ✅ | ✅ | — | ✅ |
-| Push or merge to `main` | ✅ | ✅ | ✅ | — |
+| Push or merge to `DevOps-CA2` | ✅ | ✅ | ✅ | ✅ |
 | Push to any other branch, or a pull request | ✅ | ✅ | — | — |
-| Manual run (*Actions → CI/CD → Run workflow*) | ✅ | ✅ | on `main` | on `DevOps-CA2` |
+| Manual run (*Actions → CI/CD → Run workflow*) | ✅ | ✅ | on `DevOps-CA2` | on `DevOps-CA2` |
 
 The workflow logs in to GHCR with the built-in `GITHUB_TOKEN`, so the pipeline itself needs no
 secrets. The only one is the Render deploy hook below.

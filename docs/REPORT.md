@@ -40,8 +40,8 @@ The test suite grew to **154 tests**, all passing, including a new one for the m
 flowchart TB
     DEV(["git push"]) --> REPO["GitHub repo<br/>branch DevOps-CA2"]
     REPO --> CI["GitHub Actions<br/>test · build · deploy"]
-    CI -- "main only" --> GHCR["GHCR<br/>Docker image, tag sha-commit"]
-    GHCR --> RENDER["Render<br/>hosted platform (PaaS)"]
+    CI -- "DevOps-CA2 only" --> GHCR["GHCR<br/>Docker image, tag sha-commit"]
+    CI -- "deploy hook, DevOps-CA2 only" --> RENDER["Render<br/>hosted platform (PaaS)"]
     GHCR --> K8S["Kubernetes<br/>Deployment (2 pods) + Service"]
     REPO -- "Ansible copies the same code" --> VM["Ubuntu VM<br/>systemd service"]
     RENDER & K8S & VM --> EXT[("MongoDB Atlas<br/>LLM and market-data APIs")]
@@ -57,9 +57,9 @@ flowchart TB
 | Database | MongoDB Atlas | User accounts and saved file history |
 | Outside services | An OpenAI-compatible LLM API; Yahoo Finance, NewsAPI, FMP | The written memo; market data |
 | Source control | GitHub, branch `DevOps-CA2` | One place for the code, the pipeline and the infrastructure files |
-| CI/CD | GitHub Actions ([`ci-cd.yml`](../.github/workflows/ci-cd.yml), 79 lines) | Tests every push, builds the image, deploys `main` |
+| CI/CD | GitHub Actions ([`ci-cd.yml`](../.github/workflows/ci-cd.yml), 79 lines) | Tests every push, builds the image, deploys `DevOps-CA2` |
 | Image registry | GitHub Container Registry (GHCR) | Stores each built image, tagged with its commit |
-| Runtime 1 | Render | A hosted platform for the live app, deployed by the pipeline |
+| Runtime 1 | Render | A hosted platform for the live app (<https://finveritas.onrender.com>), deployed by the pipeline |
 | Runtime 2 | Kubernetes ([`deployment.yaml`](../deploy/k8s/deployment.yaml), [`service.yaml`](../deploy/k8s/service.yaml)) | 2 copies behind one address, with rolling updates and rollback |
 | Runtime 3 | Ansible ([`site.yml`](../deploy/ansible/site.yml), [`inventory.ini`](../deploy/ansible/inventory.ini)) | Turns a plain Ubuntu server into one running the app |
 | Monitoring | `prometheus_client` in the app, Prometheus, Grafana ([`deploy/monitoring/`](../deploy/monitoring)) | Uptime, latency and error rate on one dashboard |
@@ -91,9 +91,9 @@ flowchart LR
     PUSH(["push or pull request"]) --> TEST["Job 1 · Test<br/>ruff + 154 pytest tests"]
     TEST -- pass --> BUILD["Job 2 · Build<br/>docker build"]
     TEST -- fail --> STOP(["stop: nothing is built or deployed"])
-    BUILD --> MAIN{"main<br/>branch?"}
-    MAIN -- no --> DONE(["tested and built"])
-    MAIN -- yes --> PUB["Push image to GHCR<br/>sha-1a2b3c4 · latest"]
+    BUILD --> BRANCH{"DevOps-CA2<br/>branch?"}
+    BRANCH -- no --> DONE(["tested and built"])
+    BRANCH -- yes --> PUB["Push image to GHCR<br/>sha-1a2b3c4 · latest"]
     PUB --> DEPLOY["Job 3 · Deploy<br/>Render deploy hook"]
     DEPLOY --> LIVE(["new version live"])
 ```
@@ -101,18 +101,19 @@ flowchart LR
 | Job | What it does | Runs on | Stops the pipeline when |
 |-----|-------------|---------|-------------------------|
 | **1 · Test** | Installs the dependencies, runs `ruff` for real errors (syntax errors, undefined names), then `pytest` | Every push and pull request | Any lint error or failing test |
-| **2 · Build** | `docker build`, tagging the image `sha-<commit>` and `latest`. On `main`, logs in to GHCR with the built-in `GITHUB_TOKEN` and pushes | Every push and pull request (push to GHCR: `main` only) | The image does not build |
-| **3 · Deploy** | Calls Render's deploy hook; Render pulls the new image and restarts the app | `main` only | The hook call fails |
+| **2 · Build** | `docker build`, tagging the image `sha-<commit>` and `latest`. On `DevOps-CA2`, logs in to GHCR with the built-in `GITHUB_TOKEN` and pushes | Every push and pull request (push to GHCR: `DevOps-CA2` only) | The image does not build |
+| **3 · Deploy** | Calls Render's deploy hook; Render rebuilds that commit from the `Dockerfile` and switches to it once `/_stcore/health` answers | `DevOps-CA2` only | The hook call fails |
 
 | Event | Test | Build | Push to GHCR | Deploy |
 |-------|:----:|:-----:|:------------:|:------:|
 | Push to another branch, or a pull request | yes | yes | no | no |
-| Push or merge to `main` | yes | yes | yes | yes |
+| Push or merge to `DevOps-CA2` | yes | yes | yes | yes |
 
 Each job starts only if the one before it passed, so **code that fails its tests is never
 deployed**. The `sha-<commit>` tag ties every running image to the exact commit it came from.
-Until the `RENDER_DEPLOY_HOOK_URL` repository secret is added, the Deploy job passes with a
-"Not deployed" warning instead of failing ([CI_CD.md](CI_CD.md) has the one-time setup).
+The `RENDER_DEPLOY_HOOK_URL` repository secret connects the Deploy job to Render; without it,
+the job passes with a "Not deployed" warning instead of failing ([CI_CD.md](CI_CD.md) has the
+one-time setup). Render's own Auto-Deploy is off, so the pipeline is the only thing that deploys.
 
 ### 3.2 Shipping a new version on Kubernetes
 
@@ -292,8 +293,8 @@ deliverable end to end as soon as it exists, not at the end.
 
 | Limitation now | Next step |
 |----------------|-----------|
-| Deploying to Render needs a one-time Render setup and the `RENDER_DEPLOY_HOOK_URL` secret | Follow the setup in [CI_CD.md](CI_CD.md); the pipeline is already wired for it |
-| The workflow's steps were verified locally (lint, tests, `docker build`) | Watch the first runs in the repository's **Actions** tab |
+| The free Render instance sleeps after 15 minutes without visitors, so the next visit takes about a minute | A paid instance, or open the site a minute before a demo |
+| Render builds the commit itself, so the image in GHCR is not the exact image running there | Deploy the GHCR image by digest (an image-backed Render service) |
 | The monitoring stack has no database, so logins fail there | Add `env_file: ../../.env` or a MongoDB service (see [MONITORING.md](MONITORING.md)) |
 | No alerts: someone has to look at the dashboard | Prometheus alert rules, e.g. error rate above 5% for 5 minutes |
 | No central logs | Ship container logs to Loki and show them in the same Grafana |

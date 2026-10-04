@@ -3,7 +3,7 @@ name: CI/CD
 # A simple three-step pipeline (diagram and setup in docs/CI_CD.md):
 #
 #   1. Test    lint the code and run the test suite
-#   2. Build   build the Docker image; on main, push it to GitHub Container Registry
+#   2. Build   build the Docker image; on DevOps-CA2, push it to GitHub Container Registry
 #   3. Deploy  on DevOps-CA2 only: tell Render to rebuild that commit and restart the app
 #
 # Each job starts only if the one before it passed, so broken code is never deployed.
@@ -57,7 +57,7 @@ jobs:
           docker build -t $IMAGE:$TAG -t $IMAGE:latest .
 
       - name: Push the image to GHCR
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/DevOps-CA2'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker push --all-tags $IMAGE
