@@ -4,7 +4,7 @@ name: CI/CD
 #
 #   1. Test    lint the code and run the test suite
 #   2. Build   build the Docker image; on main, push it to GitHub Container Registry
-#   3. Deploy  on main only: tell Render to pull the new image and restart the app
+#   3. Deploy  on DevOps-CA2 only: tell Render to rebuild that commit and restart the app
 #
 # Each job starts only if the one before it passed, so broken code is never deployed.
 
@@ -65,7 +65,7 @@ jobs:
   deploy:
     name: Deploy
     needs: build
-    if: github.ref == 'refs/heads/Devops-CA2'
+    if: github.ref == 'refs/heads/DevOps-CA2'   # the branch the Render service is set to
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to Render
@@ -76,4 +76,4 @@ jobs:
             echo "::warning::Not deployed: add the RENDER_DEPLOY_HOOK_URL secret (see docs/CI_CD.md)."
             exit 0
           fi
-          curl -fsS "$DEPLOY_HOOK"   # Render pulls the new :latest image and restarts the app
+          curl -fsS "$DEPLOY_HOOK"   # Render rebuilds the latest DevOps-CA2 commit and restarts the app
