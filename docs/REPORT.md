@@ -16,6 +16,9 @@ we cannot explain is a liability (see [challenge 1](#41--a-pipeline-we-could-not
 
 All work is on the branch `DevOps-CA2` of `github.com/rocko131205/PBL-2`.
 
+**Group 34:** Anshul Ravindra Mandekar (23070122033), Arunabha Mukhopadhyay (23070122049),
+Avi S Gupta (23070122060), Ayaan Rukadikar (23070122063).
+
 ---
 
 ## 1 · What was delivered
@@ -27,6 +30,7 @@ All work is on the branch `DevOps-CA2` of `github.com/rocko131205/PBL-2`.
 | 3 | Containers and orchestration | Dockerfile, Kubernetes Deployment and Service | `kubectl rollout status` / `rollout undo` screenshots | [KUBERNETES.md](KUBERNETES.md) | `c2d5997c` |
 | 4 | Monitoring | App metrics at `/metrics`, Prometheus, Grafana dashboard | Dashboard screenshots: normal traffic, an error spike, an outage | [MONITORING.md](MONITORING.md) | `442fbd35`, `b486bc64` |
 | 5 | Reflection and report | 5-slide deck and this report | – | this file | this commit |
+| 6 | Bonus: DevOps challenge | [PipePulse](https://devpost.com/software/pipepulse), a DSL for CI/CD pipelines, on Devpost | Submitted to *Syntax Summit* on 4 Oct 2026 | [Step 6 README](../CA2-Submission/6-Bonus-DevOps-Challenge/README.md) | – |
 
 The test suite grew to **154 tests**, all passing, including a new one for the monitoring code.
 

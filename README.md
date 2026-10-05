@@ -12,6 +12,15 @@ service that is **tested, built, deployed, orchestrated and monitored**.
 pipeline after every push to `DevOps-CA2` that passes its tests. It runs on Render's free
 plan, so the first visit after 15 idle minutes takes about a minute while the app wakes up.
 
+## Group 34
+
+| Name | PRN | GitHub |
+|------|-----|--------|
+| Anshul Ravindra Mandekar | 23070122033 | [AnshulMandekar](https://github.com/AnshulMandekar) |
+| Arunabha Mukhopadhyay | 23070122049 | [Arunabha-Mukhopadhyay](https://github.com/Arunabha-Mukhopadhyay) |
+| Avi S Gupta | 23070122060 | [rocko131205](https://github.com/rocko131205) |
+| Ayaan Rukadikar | 23070122063 | [AyaanRukadikar](https://github.com/AyaanRukadikar) |
+
 ---
 
 ## Deliverables
@@ -23,6 +32,7 @@ plan, so the first visit after 15 idle minutes takes about a minute while the ap
 | 3 | Containers and orchestration | [`CA2-Submission/3-Containers-Kubernetes/`](CA2-Submission/3-Containers-Kubernetes): Dockerfile, Deployment, Service, rollout screenshots | [`Dockerfile`](Dockerfile), [`deploy/k8s/`](deploy/k8s) | [`docs/KUBERNETES.md`](docs/KUBERNETES.md) |
 | 4 | Monitoring (Prometheus + Grafana) | [`CA2-Submission/4-Monitoring/`](CA2-Submission/4-Monitoring): dashboard screenshots + config | [`deploy/monitoring/`](deploy/monitoring), [`finveritas/shared/metrics.py`](finveritas/shared/metrics.py) | [`docs/MONITORING.md`](docs/MONITORING.md) |
 | 5 | Reflection and report | [`CA2-Submission/5-Reflection-and-Report/`](CA2-Submission/5-Reflection-and-Report): 5 slides + report PDF | – | [`docs/REPORT.md`](docs/REPORT.md) |
+| 6 | Bonus: external DevOps challenge | [`CA2-Submission/6-Bonus-DevOps-Challenge/`](CA2-Submission/6-Bonus-DevOps-Challenge): PipePulse on Devpost, submitted to Syntax Summit, with screenshots | – | its [`README.md`](CA2-Submission/6-Bonus-DevOps-Challenge/README.md) |
 
 [`CA2-Submission/README.md`](CA2-Submission/README.md) describes every file and screenshot.
 

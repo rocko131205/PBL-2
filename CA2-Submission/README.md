@@ -6,6 +6,9 @@ repository `github.com/rocko131205/PBL-2`, branch `DevOps-CA2`.
 
 **Live app: <https://finveritas.onrender.com>**
 
+**Group 34:** Anshul Ravindra Mandekar (23070122033), Arunabha Mukhopadhyay (23070122049),
+Avi S Gupta (23070122060), Ayaan Rukadikar (23070122063)
+
 ## Proof that the pipeline deploys it
 
 - Every push to `DevOps-CA2` runs **Test → Build → Deploy** in GitHub Actions
@@ -27,6 +30,7 @@ repository `github.com/rocko131205/PBL-2`, branch `DevOps-CA2`.
 | 3 | Containers and orchestration | Dockerfile, Deployment and Service YAMLs, screenshots of `kubectl rollout status` / `rollout undo` | [`3-Containers-Kubernetes/`](3-Containers-Kubernetes): `Dockerfile`, `deployment.yaml`, `service.yaml`, `screenshots/k8s-1…3` |
 | 4 | Monitoring | Dashboard screenshots (uptime, latency, error rate) | [`4-Monitoring/screenshots/`](4-Monitoring/screenshots), plus the setup in [`4-Monitoring/config/`](4-Monitoring/config) |
 | 5 | Reflection and report | Slides and written documentation | [`5-Reflection-and-Report/FinVeritas-CA2-Slides.pdf`](5-Reflection-and-Report/FinVeritas-CA2-Slides.pdf) (5 slides), [`FinVeritas-CA2-Report.pdf`](5-Reflection-and-Report/FinVeritas-CA2-Report.pdf) |
+| 6 | Bonus: external DevOps challenge | Proof of submission / leaderboard | [`6-Bonus-DevOps-Challenge/`](6-Bonus-DevOps-Challenge): PipePulse on Devpost, submitted to Syntax Summit; `README.md` + `screenshots/devpost-*` |
 
 ## What each screenshot shows
 
@@ -38,6 +42,9 @@ repository `github.com/rocko131205/PBL-2`, branch `DevOps-CA2`.
 | `monitoring-1-dashboard.png` | The Grafana dashboard after a live run: an error spike, an outage, and recovery |
 | `monitoring-2-app-down.png` | The dashboard during the outage: status DOWN |
 | `monitoring-3-prometheus-target.png` | Prometheus reading the app's `/metrics` endpoint: target UP |
+| `devpost-project-page.png` | Our Devpost project PipePulse: *Submitted to Syntax Summit*, and the four team members |
+| `devpost-team.png` | The project's story and team on Devpost |
+| `devpost-submission-history.png` | Devpost *Submission history*: PipePulse submitted to Syntax Summit |
 
 ## Notes
 
