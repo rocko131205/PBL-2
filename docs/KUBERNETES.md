@@ -43,14 +43,14 @@ image from the CI pipeline, tagged `sha-<commit>`.
 
 ### 1 · Deploy v1: `kubectl apply` + `kubectl rollout status`
 
-![kubectl apply, rollout status, and the 2 running v1 pods](images/k8s-1-deploy-v1.png)
+![kubectl apply, rollout status, and the 2 running v1 pods](../CA2-Submission/3-Containers-Kubernetes/screenshots/k8s-1-deploy-v1.png)
 
 `apply` creates the Deployment and the Service. `rollout status` waits until both pods are
 ready (0, then 1, then 2 available).
 
 ### 2 · Rolling update to v2: `kubectl set image` + `kubectl rollout status`
 
-![The new v2 pod starting next to the two v1 pods, and rollout status following the update](images/k8s-2-rolling-update.png)
+![The new v2 pod starting next to the two v1 pods, and rollout status following the update](../CA2-Submission/3-Containers-Kubernetes/screenshots/k8s-2-rolling-update.png)
 
 Straight after `set image`, one new pod (`66b77648fd`, `0/1`, still starting) runs next to
 the two v1 pods (`f8ff4f9b5`). `rollout status` follows the update while the pods are swapped
@@ -58,7 +58,7 @@ one at a time. Afterwards both pods run `finveritas:v2`.
 
 ### 3 · Roll back: `kubectl rollout undo` + `kubectl rollout status`
 
-![rollout history, rollout undo, rollout status, and the v1 pods back](images/k8s-3-rollout-undo.png)
+![rollout history, rollout undo, rollout status, and the v1 pods back](../CA2-Submission/3-Containers-Kubernetes/screenshots/k8s-3-rollout-undo.png)
 
 `rollout undo` returns to the previous revision, replacing the pods one at a time again. The
 image is `finveritas:v1` once more, and the pods have the v1 name (`f8ff4f9b5`) again, because

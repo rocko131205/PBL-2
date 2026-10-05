@@ -60,7 +60,7 @@ pipeline works as normal.
    account (*github.com/apps/render → Configure*) and give it access to `PBL-2`.
 2. **Create the Render service.** *New → Web Service*, pick `rocko131205/PBL-2`:
    - Language *Docker*, Branch `DevOps-CA2`. Render builds the repo's `Dockerfile` itself.
-   - Environment variables: the ones listed in [README.md](README.md#environment-variables-env-in-the-repo-root),
+   - Environment variables: the ones listed in [README.md](../README.md#environment-variables-env-in-the-repo-root),
      at least `JWT_SECRET` (random, so login tokens can't be forged), `MONGO_URI` (MongoDB Atlas,
      with *Network Access* allowing `0.0.0.0/0`: free Render services have no fixed IP) and
      `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY`.

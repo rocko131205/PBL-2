@@ -19,7 +19,3 @@ env/
 .vscode/
 *.swp
 
-# R artifacts (not used)
-.Rhistory
-.RData
-.Rproj.user/

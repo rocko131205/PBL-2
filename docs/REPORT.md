@@ -134,7 +134,7 @@ The Deployment keeps **2 pods** running and replaces them one at a time (`maxSur
 ReplicaSet, which is why the pods come back with their old names. All three steps are shown
 with real screenshots in [KUBERNETES.md](KUBERNETES.md#the-demonstration).
 
-![kubectl rollout history, rollout undo and rollout status on the kind cluster; the image is finveritas:v1 again](images/k8s-3-rollout-undo.png)
+![kubectl rollout history, rollout undo and rollout status on the kind cluster; the image is finveritas:v1 again](../CA2-Submission/3-Containers-Kubernetes/screenshots/k8s-3-rollout-undo.png)
 
 *Figure 1: rolling back with `kubectl rollout undo` on a local kind cluster (real terminal output).*
 
@@ -172,7 +172,7 @@ In the recorded demo the dashboard caught all three kinds of event:
   5-second check.
 - **Totals:** uptime for the period was **86.3%**, with about **320 page runs**, of which **25 failed**.
 
-![Grafana dashboard after the demo run: status UP, uptime 86.3%, p95 9 ms, error rate 0%, with the error spike and the outage on the graphs](images/monitoring-1-dashboard.png)
+![Grafana dashboard after the demo run: status UP, uptime 86.3%, p95 9 ms, error rate 0%, with the error spike and the outage on the graphs](../CA2-Submission/4-Monitoring/screenshots/monitoring-1-dashboard.png)
 
 *Figure 2: the Grafana dashboard after the demo run. All three screenshots are explained in
 [MONITORING.md](MONITORING.md#screenshots).*
@@ -307,9 +307,10 @@ deliverable end to end as soon as it exists, not at the end.
 
 | What | Command or file |
 |------|-----------------|
+| Live app | <https://finveritas.onrender.com>, deployed by the pipeline (Render's *Events* lists each deploy as triggered by the deploy hook) |
 | Tests | `pytest`: 154 tests |
 | CI/CD | [`.github/workflows/ci-cd.yml`](../.github/workflows/ci-cd.yml) and the **Actions** tab |
 | Ansible | `ansible-playbook -i deploy/ansible/inventory.ini deploy/ansible/site.yml` (from Linux, macOS or WSL) |
 | Kubernetes | The commands in [KUBERNETES.md](KUBERNETES.md#run-it-yourself) |
 | Monitoring | `docker compose -f deploy/monitoring/docker-compose.yml up -d --build`, then http://localhost:3000 |
-| Screenshots | [`docs/images/`](images): `k8s-1…3` (rollout) and `monitoring-1…3` (dashboard) |
+| Screenshots | `CA2-Submission/`: [`k8s-1…3`](../CA2-Submission/3-Containers-Kubernetes/screenshots) (rollout) and [`monitoring-1…3`](../CA2-Submission/4-Monitoring/screenshots) (dashboard) |

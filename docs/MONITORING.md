@@ -66,7 +66,7 @@ the screenshots are UTC.
 
 ### 1 · The whole run
 
-![Grafana dashboard after the run: status UP, uptime 86.3%, p95 9 ms, error rate 0%, with the error spike and the outage visible on the graphs](images/monitoring-1-dashboard.png)
+![Grafana dashboard after the run: status UP, uptime 86.3%, p95 9 ms, error rate 0%, with the error spike and the outage visible on the graphs](../CA2-Submission/4-Monitoring/screenshots/monitoring-1-dashboard.png)
 
 - **Uptime:** the step down at 19:50 is the outage, so uptime for the period is **86.3%**.
 - **Latency:** p95 sits around **9 ms** for normal page runs and rises to about **7 s**
@@ -78,14 +78,14 @@ the screenshots are UTC.
 
 ### 2 · During the outage
 
-![Grafana dashboard during the outage: status DOWN in red](images/monitoring-2-app-down.png)
+![Grafana dashboard during the outage: status DOWN in red](../CA2-Submission/4-Monitoring/screenshots/monitoring-2-app-down.png)
 
 Taken about a minute into the outage. **Status** turned **DOWN** within one 5-second check,
 and all four headline numbers turned red.
 
 ### 3 · Prometheus collecting the app's metrics
 
-![Prometheus target health page: the finveritas job, endpoint http://app:9464/metrics, state UP](images/monitoring-3-prometheus-target.png)
+![Prometheus target health page: the finveritas job, endpoint http://app:9464/metrics, state UP](../CA2-Submission/4-Monitoring/screenshots/monitoring-3-prometheus-target.png)
 
 Prometheus's *Status › Target health* page: the `finveritas` job reads `http://app:9464/metrics`,
 each read takes a few milliseconds, and the target is **UP**.
