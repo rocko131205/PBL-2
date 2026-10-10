@@ -1,0 +1,78 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Design tokens: dark glass fintech. Plum/rose accent; emerald = good, amber = watch, rose = risk.
+   Token names are semantic, so a light theme can be added later by overriding these. */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+  --color-canvas: #070a10;
+  --color-surface: #ffffff0a;
+  --color-surface-solid: #0f141c;
+  --color-line: #ffffff14;
+  --color-line-strong: #ffffff29;
+  --color-ink: #f6f3f8;
+  --color-ink-2: #b6bfcc;
+  --color-ink-3: #8590a0;
+
+  /* accent (plum → rose) */
+  --color-brand-50: #60a5fa1a;
+  --color-brand-100: #dbeafe;
+  --color-brand-600: #3b82f6;
+  --color-brand-700: #7dd3fc;
+  --color-brand-900: #0f1e3d;
+
+  --color-good: #34d399;
+  --color-good-bg: #34d3991a;
+  --color-watch: #fbbf24;
+  --color-watch-bg: #fbbf241a;
+  --color-risk: #fb7185;
+  --color-risk-bg: #fb71851a;
+  --color-info: #7dd3fc;
+  --color-info-bg: #7dd3fc1a;
+
+  --shadow-card: 0 1px 0 #ffffff10 inset, 0 12px 32px -12px #00000099;
+}
+
+html { color-scheme: dark; }
+body {
+  min-height: 100vh;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(64rem 42rem at 8% -10%, #1e40af55, transparent 62%),
+    radial-gradient(56rem 38rem at 100% 105%, #0e749040, transparent 60%);
+  background-attachment: fixed;
+}
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--color-brand-700); outline-offset: 2px; }
+::selection { background: #3b82f666; }
+
+/* Frosted-glass surface used by cards, sidebar and the header.
+   In the components layer so utilities like bg-surface-solid can override it (menus, drawers). */
+@layer components {
+  .glass {
+    background: linear-gradient(180deg, #ffffff0f, #ffffff05);
+    border: 1px solid var(--color-line);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: var(--shadow-card);
+  }
+}
+.accent-gradient { background-image: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+.accent-text {
+  background-image: linear-gradient(90deg, #bae6fd, #93c5fd);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+select option { background: var(--color-surface-solid); color: var(--color-ink); }
+
+@media print {
+  aside, header, .no-print { display: none !important; }
+  body { background: #fff; color: #000; }
+}

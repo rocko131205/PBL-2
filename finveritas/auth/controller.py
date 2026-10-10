@@ -238,11 +238,18 @@ def disable_mfa(user_id: str, code: str) -> tuple[bool, str]:
     user = get_user_by_id(user_id)
     if not user or not user.get("mfa_enabled"):
         return False, "Two-factor authentication is not enabled."
+    # Same throttle as the MFA login step, so a stolen session can't brute-force the 6-digit code.
+    key = f"mfa_disable:{user_id}"
+    if ratelimit.is_limited(key, config.MFA_MAX_FAILURES, config.LOGIN_WINDOW_MINUTES):
+        audit.log_event(audit.LOGIN_LOCKED, user_id=user_id, detail={"stage": "mfa_disable"})
+        return False, "Too many incorrect codes. Please wait before trying again."
     secret = mfa.decrypt_secret(user.get("mfa_secret_enc") or "")
     step = mfa.verify(secret, code, user.get("mfa_last_step")) if secret else None
     if step is None:
+        ratelimit.record(key, config.LOGIN_WINDOW_MINUTES)
         audit.log_event(audit.MFA_FAILURE, email=user["email"], user_id=user_id, detail={"stage": "disable"})
         return False, "Invalid authentication code."
+    ratelimit.clear(key)
     get_users().update_one({"_id": user["_id"]}, {"$set": {
         "mfa_enabled": False, "mfa_secret_enc": None, "mfa_last_step": None,
     }})
@@ -422,17 +429,24 @@ def complete_password_reset(session_state: Any, new_password: str) -> tuple[bool
     return ok, msg
 
 
-def reset_password(email: str, new_password: str) -> tuple[bool, str]:
-    """Low-level password change. Callers must have verified the user first."""
+def reset_password(email: str, new_password: str, *, expected_hash: str | None = None) -> tuple[bool, str]:
+    """Low-level password change. Callers must have verified the user first.
+
+    `expected_hash`, if given, makes the change conditional on the password not having changed
+    since the caller checked it, so a single-use reset grant can't be redeemed twice concurrently.
+    """
     issues = password_issues(new_password)
     if issues:
         return False, "Password needs: " + ", ".join(issues)
 
     email = _normalize_email(email)
     new_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt(rounds=12)).decode()
-    user = get_users().find_one_and_update({"email": email}, {"$set": {"password_hash": new_hash}})
+    match: dict[str, Any] = {"email": email}
+    if expected_hash is not None:
+        match["password_hash"] = expected_hash
+    user = get_users().find_one_and_update(match, {"$set": {"password_hash": new_hash}})
     if not user:
-        return False, "User not found."
+        return False, "Your reset session expired. Please start again." if expected_hash else "User not found."
 
     # A reset usually means the old password may be compromised: end every session.
     sessions.revoke_all(str(user["_id"]))

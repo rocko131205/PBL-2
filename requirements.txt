@@ -36,3 +36,9 @@ langchain-core>=0.2
 # ── Testing ─────────────────────────────────────────────────────────────────
 pytest>=8.0
 mongomock>=4.1          # In-memory MongoDB for the security test suite
+
+# -- API (FastAPI backend for the React UI) ---------------------------------
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9  # file uploads
+httpx>=0.27              # FastAPI TestClient

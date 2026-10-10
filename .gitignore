@@ -32,3 +32,8 @@ redteam_results*.json
 
 # Ansible Vault secrets — encrypted or not, keep them out of git
 deploy/ansible/group_vars/*/vault.yml
+
+# React frontend
+web/node_modules/
+web/dist/
+*.tsbuildinfo

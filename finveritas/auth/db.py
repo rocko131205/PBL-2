@@ -50,6 +50,11 @@ def _ensure_indexes(db: Database) -> None:
     db.audit_log.create_index([("user_id", ASCENDING), ("timestamp", ASCENDING)])
     db.audit_log.create_index([("event", ASCENDING), ("timestamp", ASCENDING)])
 
+    # One workspace (loaded dataset + preferences) per user — replaces st.session_state for the API.
+    db.workspaces.create_index([("user_id", ASCENDING)], unique=True)
+    # Analysis runs (background jobs + their results), always queried per user.
+    db.analyses.create_index([("user_id", ASCENDING), ("created_at", ASCENDING)])
+
 
 def get_users() -> Collection:
     return get_db()["users"]
@@ -73,6 +78,19 @@ def get_password_resets() -> Collection:
 
 def get_audit_log() -> Collection:
     return get_db()["audit_log"]
+
+
+def get_workspaces() -> Collection:
+    return get_db()["workspaces"]
+
+
+def get_analyses() -> Collection:
+    return get_db()["analyses"]
+
+
+def get_analysis_locks() -> Collection:
+    """One document per user whose _id is the user id: holding it means "an analysis is running"."""
+    return get_db()["analysis_locks"]
 
 
 def _reset_for_tests(db: Database) -> None:

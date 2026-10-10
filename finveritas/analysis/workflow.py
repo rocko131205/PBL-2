@@ -31,7 +31,7 @@ import json
 import os
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Callable, Dict, List, Optional, TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
@@ -804,21 +804,50 @@ def credit_assessment_node(state: WorkflowState) -> WorkflowState:
 # Build the LangGraph workflow
 # -------------------------------------------------------------------------
 
-def build_workflow() -> StateGraph:
+# Pipeline stages in execution order — the API reports progress against these keys.
+PIPELINE_STAGES: List[tuple[str, str]] = [
+    ("company_intelligence", "Identify the company"),
+    ("financial_computation", "Compute financial metrics"),
+    ("peer_analysis", "Benchmark against peers"),
+    ("qualitative_analysis", "Read management commentary"),
+    ("credit_assessment", "Assess credit risk"),
+]
+
+StepCallback = Callable[[str, str], None]  # (event: "start" | "done", stage_key)
+
+
+def _reporting(name: str, fn: Callable[[WorkflowState], WorkflowState],
+               on_step: Optional[StepCallback]) -> Callable[[WorkflowState], WorkflowState]:
+    """Wrap a node so progress is reported before and after it runs (no-op without a callback)."""
+    if on_step is None:
+        return fn
+
+    def run(state: WorkflowState) -> WorkflowState:
+        on_step("start", name)
+        out = fn(state)
+        on_step("done", name)
+        return out
+
+    return run
+
+
+def build_workflow(on_step: Optional[StepCallback] = None) -> StateGraph:
     """Build the V2 agentic workflow graph.
 
     Flow:
       company_intelligence → financial_computation → peer_analysis
       → qualitative_analysis → credit_assessment → END
+
+    `on_step`, if given, is called as ("start"|"done", stage_key) around each node.
     """
     workflow = StateGraph(WorkflowState)
 
     # Add nodes
-    workflow.add_node("company_intelligence", company_intelligence_node)
-    workflow.add_node("financial_computation", financial_computation_node)
-    workflow.add_node("peer_analysis", peer_analysis_node)
-    workflow.add_node("qualitative_analysis", qualitative_analysis_node)
-    workflow.add_node("credit_assessment", credit_assessment_node)
+    workflow.add_node("company_intelligence", _reporting("company_intelligence", company_intelligence_node, on_step))
+    workflow.add_node("financial_computation", _reporting("financial_computation", financial_computation_node, on_step))
+    workflow.add_node("peer_analysis", _reporting("peer_analysis", peer_analysis_node, on_step))
+    workflow.add_node("qualitative_analysis", _reporting("qualitative_analysis", qualitative_analysis_node, on_step))
+    workflow.add_node("credit_assessment", _reporting("credit_assessment", credit_assessment_node, on_step))
 
     # Define edges
     workflow.set_entry_point("company_intelligence")
@@ -840,6 +869,7 @@ def run_analysis(
     llm_api_key: str = "local",
     fmp_api_key: Optional[str] = None,
     news_api_key: Optional[str] = None,
+    on_step: Optional[StepCallback] = None,
 ) -> Dict[str, Any]:
     """Run the complete V2 analysis workflow.
 
@@ -852,11 +882,12 @@ def run_analysis(
         llm_api_key: LLM API key
         fmp_api_key: Optional FMP API key for supplemental data
         news_api_key: Optional NewsAPI key for sentiment
+        on_step: Optional progress callback, see build_workflow
 
     Returns:
         Complete workflow state including credit report, fact ledger, and risk dashboard.
     """
-    graph = build_workflow()
+    graph = build_workflow(on_step)
     app = graph.compile()
 
     initial_state: WorkflowState = {

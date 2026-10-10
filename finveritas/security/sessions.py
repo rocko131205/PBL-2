@@ -30,6 +30,7 @@ def issue(user: dict[str, Any]) -> str:
         "jti": jti,
         "user_id": user_id,
         "created_at": now,
+        "last_seen": now,  # the API's inactivity timeout counts from here
         "expires_at": exp,
         "revoked": False,
         "ip": audit.client_ip(),
@@ -50,12 +51,14 @@ def issue(user: dict[str, Any]) -> str:
     )
 
 
-def validate(token: str) -> dict[str, Any] | None:
-    """Return the token payload if signature, claims and session are all valid."""
-    from finveritas.auth.db import get_sessions
+def claims(token: str) -> dict[str, Any] | None:
+    """Verify only the token itself (signature, expiry, issuer, required claims) — no database access.
 
+    Callers that go on to check the session record themselves (the API does so atomically with its
+    inactivity update) use this instead of `validate` to avoid a second lookup.
+    """
     try:
-        payload = jwt.decode(
+        return jwt.decode(
             token,
             config.jwt_secret(),
             algorithms=[config.JWT_ALGORITHM],  # pinned — rejects alg=none / RS/HS confusion
@@ -63,6 +66,15 @@ def validate(token: str) -> dict[str, Any] | None:
             options={"require": ["exp", "iat", "jti", "sub", "iss"]},
         )
     except jwt.InvalidTokenError:
+        return None
+
+
+def validate(token: str) -> dict[str, Any] | None:
+    """Return the token payload if signature, claims and session are all valid."""
+    from finveritas.auth.db import get_sessions
+
+    payload = claims(token)
+    if payload is None:
         return None
 
     try:

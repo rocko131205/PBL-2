@@ -7,6 +7,7 @@ is reported on stderr so it is not silent.
 from __future__ import annotations
 
 import sys
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any
 
@@ -36,8 +37,19 @@ _FAILURE_EVENTS = {
 }
 
 
+_request_ip: ContextVar[str | None] = ContextVar("request_ip", default=None)
+
+
+def set_client_ip(ip: str | None) -> None:
+    """Called by the API middleware so audit entries carry the request's IP."""
+    _request_ip.set(ip)
+
+
 def client_ip() -> str | None:
-    """Best-effort client IP from the active Streamlit request."""
+    """Best-effort client IP: the API request's, else the active Streamlit request's."""
+    ip = _request_ip.get()
+    if ip:
+        return ip
     try:
         from streamlit.runtime.scriptrunner import get_script_run_ctx
         if get_script_run_ctx(suppress_warning=True) is None:
