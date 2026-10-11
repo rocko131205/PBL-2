@@ -41,6 +41,11 @@ _FIELD_MAP: Dict[str, str] = {
     "accounts_payable":        "accounts_payable",
     "basic_eps":               "basic_eps",
     "diluted_eps":             "diluted_eps",
+    "sga_expense":             "sga_expense",
+    "rd_expense":              "rd_expense",
+    "amortization":            "amortization",
+    "investing_cash_flow":     "investing_cash_flow",
+    "financing_cash_flow":     "financing_cash_flow",
 }
 
 
@@ -59,6 +64,20 @@ def _map_series(ts: dict[str, Any], field_name: str) -> List[FinancialPeriod]:
                 except (ValueError, TypeError):
                     pass
     return periods
+
+
+def _numeric_dict(raw: Any) -> Dict[str, float]:
+    """Keep only finite numeric entries of a user-supplied mapping."""
+    out: Dict[str, float] = {}
+    if isinstance(raw, dict):
+        for k, v in raw.items():
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                continue
+            if f == f and abs(f) != float("inf"):
+                out[str(k)] = f
+    return out
 
 
 def payload_to_normalized_record(
@@ -98,6 +117,9 @@ def payload_to_normalized_record(
         ticker_symbol=entity_dict.get("source_files", [None])[0] if source_type == "ticker" else None,
         qualitative_context=entity_dict.get("qualitative_context", ""),
         source_provenance=source_provenance,
+        sector=str(entity_dict.get("sector") or payload.get("sector") or "general"),
+        domain_inputs=_numeric_dict(entity_dict.get("domain_inputs") or payload.get("domain_inputs")),
+        segments=payload.get("segments") if isinstance(payload.get("segments"), dict) else {},
         **kwargs,
     )
 

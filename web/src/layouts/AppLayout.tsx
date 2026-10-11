@@ -4,6 +4,7 @@ import { BookOpenCheck, ChevronDown, History, LayoutDashboard, LogOut, Menu, Shi
 import clsx from "clsx";
 import { Wordmark } from "@/components/Brand";
 import { useAuth } from "@/lib/auth";
+import { AnalysisNav } from "./AnalysisNav";
 
 const NAV = [
   { to: "/upload", label: "Upload", Icon: Upload },
@@ -23,7 +24,7 @@ function NavItem({ to, label, Icon, onClick }: { to: string; label: string; Icon
     <NavLink
       to={to} onClick={onClick}
       className={({ isActive }) =>
-        clsx("flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition",
+        clsx("flex items-center gap-3 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors duration-150",
           isActive ? "accent-gradient text-white shadow-[0_8px_24px_-10px_#3b82f6]" : "text-ink-2 hover:bg-white/[0.06] hover:text-ink")}
     >
       <Icon className="size-[18px]" aria-hidden /> {label}
@@ -35,26 +36,47 @@ export function AppLayout() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+
+  // While the mobile drawer is open: Escape closes it and the page behind doesn't scroll. If the window
+  // grows to desktop width the drawer state is reset, so the scroll lock can never get stuck on.
+  useEffect(() => {
+    if (!open) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const wide = window.matchMedia("(min-width: 1024px)");
+    const onWide = () => { if (wide.matches) setOpen(false); };
+    document.addEventListener("keydown", esc);
+    wide.addEventListener("change", onWide);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", esc);
+      wide.removeEventListener("change", onWide);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
   const account = user?.is_admin ? [...ACCOUNT, { to: "/admin/security", label: "Security dashboard", Icon: ShieldAlert }] : ACCOUNT;
   const first = user?.full_name.split(" ")[0] ?? "";
 
   return (
-    <div className="min-h-screen gap-4 p-3 lg:grid lg:grid-cols-[16.5rem_minmax(0,1fr)] lg:p-4">
+    <div className="min-h-screen gap-4 p-3 lg:grid lg:grid-cols-[15rem_minmax(0,1fr)] lg:p-4">
       {/* Sidebar: floats as a rounded glass panel on desktop, a drawer on small screens */}
       <aside
         className={clsx(
-          "glass fixed inset-y-3 left-3 z-40 flex w-64 flex-col rounded-3xl p-4 transition-transform lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-auto lg:translate-x-0",
-          open ? "translate-x-0" : "-translate-x-[110%]",
+          "glass fixed inset-y-3 left-3 z-40 flex w-64 flex-col rounded-3xl p-4 transition-[transform,visibility] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:w-auto lg:translate-x-0",
+          // Closed on a small screen: off-screen AND invisible, so its links can't be tabbed to.
+          open ? "translate-x-0" : "-translate-x-[110%] max-lg:invisible",
         )}
       >
-        <div className="flex items-center justify-between px-1.5 pb-7 pt-1.5">
+        <div className="flex shrink-0 items-center justify-between px-1.5 pb-5 pt-1.5">
           <Wordmark />
           <button className="rounded p-1 text-ink-3 lg:hidden" onClick={close} aria-label="Close menu"><X className="size-5" /></button>
         </div>
-        <nav aria-label="Main" className="space-y-1">
-          {NAV.map((n) => <NavItem key={n.to} {...n} onClick={close} />)}
+        {/* Only this middle section scrolls (and only when an expanded menu is taller than the screen); the logo above
+            and Security below stay put. The side padding stops the active glow being clipped. */}
+        <nav aria-label="Main" className="-mx-2 min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2 pb-3">
+          {NAV.map((n) => (n.to === "/analysis" ? <AnalysisNav key={n.to} onNavigate={close} /> : <NavItem key={n.to} {...n} onClick={close} />))}
         </nav>
-        <div className="mt-auto space-y-1 border-t border-line pt-4">
+        <div className="shrink-0 space-y-1 border-t border-line pt-4">
           {account.map((n) => <NavItem key={n.to} {...n} onClick={close} />)}
         </div>
       </aside>
@@ -69,7 +91,7 @@ export function AppLayout() {
           </div>
           <div className="ml-auto"><UserMenu name={user?.full_name ?? ""} email={user?.email ?? ""} onSignOut={logout} /></div>
         </header>
-        <main className="flex-1 px-1 pb-8 pt-2 sm:px-3"><Outlet /></main>
+        <main className="min-w-0 flex-1 px-1 pb-8 pt-2 sm:px-3"><Outlet /></main>
       </div>
     </div>
   );

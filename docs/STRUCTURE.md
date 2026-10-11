@@ -44,6 +44,18 @@ PBL-2/                          ← repo root
 │   │       ├── saas.py           risk.py       forecast.py    anomaly.py
 │   │       ├── dscr.py           debt_service.py   (DSCR ratio + full schedule/stress)
 │   │       ├── scorecard.py      memo.py
+│   │       └── extended/         the additional metrics (a separate ledger, see KT_INTEGRATION.md)
+│   │           ├── growth.py       cost.py        efficiency.py (+ ROIC)   cash_flow.py
+│   │           ├── credit.py       Tandon Method II working capital
+│   │           ├── domain.py       SaaS / banking / retail / manufacturing metrics
+│   │           ├── risk_checks.py  advisory checks (never change the grade)
+│   │           └── engine.py       runs every module, each isolated from the others
+│   │
+│   ├── intelligence/           ── 4. ON-DEMAND AGENTS (deterministic core, then narration) ──
+│   │   ├── external.py         World Bank, NewsAPI, guidance, and the "not configured" stubs
+│   │   ├── forecast_validation.py   competitive.py   credit.py
+│   │   ├── geography.py        governance.py
+│   │   └── narrate.py          guardrailed LLM narration (output checked against the facts)
 │   │
 │   ├── security/               ── SECURITY CONTROLS (used by all layers) ───────
 │   │   ├── config.py           fail-closed secrets, security constants
@@ -63,8 +75,15 @@ PBL-2/                          ← repo root
 │       ├── components.py       reusable Streamlit UI components
 │       └── styles.css          the design system
 │
+├── api/                        FastAPI backend: routers/ (auth, ingest, analysis, intelligence, history, security)
+├── web/                        React + TypeScript front end (see UI_REVAMP.md)
+│   └── src/
+│       ├── layouts/            AppLayout (sidebar, drawer), AnalysisNav (the Analysis accordion)
+│       ├── lib/                api client, analysis hooks and types, analysisNav (the page tree)
+│       ├── pages/              upload/, analysis/ (Intelligence.tsx, Regional.tsx, ...), auth, security
+│       └── components/         ui primitives, StatusBadge, charts
 ├── scripts/                    llm_redteam.py (live injection test), make_admin.py
-└── tests/                      266 tests (pytest); tests/security/ = 113 security tests
+└── tests/                      368 tests (pytest); tests/security/ = 113 security tests. Not yet covering the extended / intelligence code
 ```
 
 ## Execution flow
@@ -80,6 +99,10 @@ PBL-2/                          ← repo root
 
 **The rule:** everything in `analysis/metrics/` computes numbers deterministically;
 `analysis/workflow.py` + `assistant.py` only explain them. `shared/` is used by all layers.
+
+## Where the DeterminX features live
+
+See **[KT_INTEGRATION.md](KT_INTEGRATION.md)** for the file-by-file map from the DeterminX fork to this tree.
 
 ## Run it
 

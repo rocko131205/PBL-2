@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ShieldAlert } from "lucide-react";
 import clsx from "clsx";
 import { Alert, Card, Spinner } from "@/components/ui";
 import { ApiError } from "@/lib/api";
@@ -17,6 +17,37 @@ const STATUS: Record<CredibilityCheck["status"], { label: string; cls: string }>
   fail: { label: "Fail", cls: "bg-risk-bg text-risk" },
   skip: { label: "Skipped", cls: "bg-white/10 text-ink-3" },
 };
+
+// Shelf / shell-company screen: always shown, whatever the outcome, so it can't be missed.
+const SHELF_CHECK = "Shelf Company Indicators";
+const SHELF: Record<"pass" | "warn" | "fail", { label: string; cls: string; advice: string }> = {
+  pass: {
+    label: "Clear", cls: "border-good/30 bg-good-bg text-good",
+    advice: "No dormant or shell company signals detected in the available financial data.",
+  },
+  warn: {
+    label: "Caution", cls: "border-watch/30 bg-watch-bg text-watch",
+    advice: "At least one shelf/shell indicator was detected. Verify operational activity, beneficial ownership and business purpose before proceeding.",
+  },
+  fail: {
+    label: "High risk", cls: "border-risk/30 bg-risk-bg text-risk",
+    advice: "Multiple signals suggest this entity may be dormant or a shell. Nominee ownership, round-tripping and layering are common risk vectors, so enhanced due diligence is needed before any credit or investment decision.",
+  },
+};
+
+function ShelfPanel({ check }: { check?: CredibilityCheck }) {
+  if (!check || check.status === "skip") return null;
+  const tone = SHELF[check.status];
+  return (
+    <div className={clsx("mt-5 rounded-xl border p-4", tone.cls)} role="status">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+        <ShieldAlert className="size-4" aria-hidden /> Shelf company check: {tone.label}
+      </div>
+      <div className="mt-1 text-sm text-ink">{check.detail}</div>
+      <div className="mt-1 text-xs text-ink-2">{tone.advice} This surfaces signals for an analyst to investigate; it is not a legal determination.</div>
+    </div>
+  );
+}
 
 const R = 32;
 const C = 2 * Math.PI * R;
@@ -47,6 +78,8 @@ export function CredibilityCard({ data, loading, error }: Props) {
           Automated checks on source authenticity, internal consistency and completeness. The score is the weighted share of checks that passed (skipped checks are ignored).
         </p>
       </div>
+
+      <ShelfPanel check={data.checks.find((c) => c.name === SHELF_CHECK)} />
 
       <button onClick={() => setOpen((o) => !o)} aria-expanded={open}
         className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline">

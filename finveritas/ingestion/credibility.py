@@ -338,6 +338,75 @@ def _check_ticker_dual_source(
                             "No overlapping periods found between yfinance and FMP data", weight=20)
 
 
+def _check_shelf_company_indicators(payload: dict[str, Any]) -> CredibilityCheck:
+    """Detect dormant or shelf/shell company indicators."""
+    ts = payload.get("time_series") or {}
+    signals: list[str] = []
+
+    rev_vals   = _ts_values(payload, "revenue")
+    asset_vals = _ts_values(payload, "total_assets")
+    liab_vals  = _ts_values(payload, "total_liabilities")
+
+    # 1 — Revenue negligible (< 100 units absolute)
+    if rev_vals and max(abs(v) for v in rev_vals) < 100:
+        signals.append("revenue negligible across all periods (< 100 units)")
+
+    # 2 — Revenue / total_assets < 2%
+    if rev_vals and asset_vals:
+        max_rev    = max(abs(v) for v in rev_vals)
+        max_assets = max(abs(v) for v in asset_vals)
+        if max_assets > 0:
+            ratio = max_rev / max_assets
+            if ratio < 0.02:
+                signals.append(f"revenue/assets ratio {ratio:.2%} (below 2%)")
+            elif ratio < 0.05:
+                signals.append(f"low revenue/assets ratio {ratio:.1%}")
+
+    # 3 — Near-zero liabilities relative to assets
+    if liab_vals and asset_vals:
+        max_liab   = max(abs(v) for v in liab_vals)
+        max_assets = max(abs(v) for v in asset_vals)
+        if max_assets > 0 and max_liab / max_assets < 0.05:
+            signals.append(f"near-zero liabilities vs assets ({max_liab / max_assets:.1%})")
+
+    # 4 — Dormant financials: ≥3 fields with < 1% YoY change across all periods
+    dormant_fields: list[str] = []
+    for fname, entries in ts.items():
+        if not isinstance(entries, list) or len(entries) < 2:
+            continue
+        vals = [
+            e["value"]
+            for e in sorted(entries, key=lambda x: x.get("period", ""))
+            if isinstance(e, dict) and e.get("value") is not None
+        ]
+        changes = [
+            abs((vals[i] - vals[i - 1]) / vals[i - 1])
+            for i in range(1, len(vals))
+            if abs(vals[i - 1]) > 1
+        ]
+        if changes and max(changes) < 0.01:
+            dormant_fields.append(fname)
+    if len(dormant_fields) >= 3:
+        signals.append(f"static financials on {len(dormant_fields)} fields (< 1% YoY change)")
+
+    if not signals:
+        return CredibilityCheck(
+            "Shelf Company Indicators", STATUS_PASS,
+            "No dormant / shell company indicators detected", weight=15,
+        )
+    if len(signals) >= 2:
+        return CredibilityCheck(
+            "Shelf Company Indicators", STATUS_FAIL,
+            f"Multiple shelf/shell company signals — {'; '.join(signals[:3])}. Manual review required.",
+            weight=15,
+        )
+    return CredibilityCheck(
+        "Shelf Company Indicators", STATUS_WARN,
+        f"Possible shelf company indicator — {signals[0]}. Verify operational status.",
+        weight=15,
+    )
+
+
 def _check_ticker_listing_status(ticker: str) -> CredibilityCheck:
     """Confirm ticker is actively traded (not delisted)."""
     try:
@@ -422,5 +491,6 @@ def run_verification(
     report.checks.append(_check_freshness(payload))
     report.checks.append(_check_yoy_plausibility(payload))
     report.checks.append(_check_internal_consistency(payload))
+    report.checks.append(_check_shelf_company_indicators(payload))  # always last, never skipped
 
     return report

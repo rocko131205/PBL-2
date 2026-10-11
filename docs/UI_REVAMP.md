@@ -46,19 +46,35 @@ web/  (React + TypeScript)  ──  /api/*  ──►  api/  (FastAPI)  ──�
 | `/security` | Set up / disable 2FA (QR code), see active sessions and sign out the others, recent account activity. |
 | `/admin/security` | Admin-only dashboard: 24-hour login, lockout, OTP and prompt-injection counts, top targeted accounts and IPs, and recent events. |
 
-### The Analysis report (tabs)
+### The Analysis report (sidebar navigation)
 
-The open tab is kept in the URL (`/analysis?tab=debt`), so refresh and back/forward work.
+There is no horizontal tab bar. **Analysis** in the main sidebar expands into an accordion (clicking it again
+collapses it), and each group opens its own pages one at a time. The open page is kept in the URL
+(`/analysis?tab=debt`), so refresh, back/forward and shared links work, and a breadcrumb above the title shows where
+you are. The whole tree lives in `web/src/lib/analysisNav.ts`; the menu is `web/src/layouts/AnalysisNav.tsx`.
 
-- **Overview** — credit grade, composite score, default-probability band, minimum DSCR, the weakest factor, a score-by-area chart, a sortable factor table, and data and risk alerts.
-- **Trends** — revenue history plus a 3-year forecast with base / optimistic / pessimistic scenarios, and the operating-margin trend.
-- **Metrics** — one category at a time (Risk signals, Revenue & SaaS, Profitability, Liquidity, Working capital, Solvency) as status-coloured tiles. Selecting a tile opens its meaning, the reason for its signal, and its formula.
-- **Peers** — company vs peer median chart and a peer table, using live data only.
-- **Debt service** — loan-terms form, then the DSCR by year (with the 1.0× danger line), amortisation schedule, stress tests and methodology. The minimum DSCR feeds back into the grade.
-- **Assessment** — strengths, risks, narrative and findings from management commentary.
-- **AI assistant** — plain-English explanation and a Q&A chat, both grounded in the computed facts only.
-- **Memo** — a printable credit memo (open to print, or download).
-- **Audit** — the agent workflow log and the raw computed data as JSON.
+| Group | Page | What it shows |
+|---|---|---|
+| | **Overview** | Credit grade, composite score, default-probability band, minimum DSCR, the weakest factor, a score-by-area chart, a sortable factor table, and data and risk alerts |
+| Financials | **Metrics** | One category at a time as status-coloured tiles (core ledger plus the extended metrics). Estimates and gaps are badged; selecting a tile opens its meaning, signal reason, formula and any note |
+| | **Trends** | Revenue history plus a 3-year forecast with base / optimistic / pessimistic scenarios, and the operating-margin trend |
+| | **Working Capital** | Tandon Method II estimate (gross working capital, gap, minimum NWC, estimated MPBF; Drawing Power shown as "needs a document") with an optional AI explanation |
+| | **Debt Service** | Loan-terms form, then DSCR by year (with the 1.0× danger line), amortisation schedule, stress tests and methodology. The minimum DSCR feeds back into the grade |
+| Credit | **Credit Grade** | The Assessment page: strengths, risks, narrative and findings from management commentary |
+| | **Forecast Check** | Enter a growth rate; get a verdict, the references it was judged against, a projection and an AI explanation |
+| | **Peers** | Company vs peer median chart and table (live data only), plus a "Full peer benchmark" card for ten metrics |
+| Risk & Alerts | **Risk Analysis** | Advisory trend checks and the own-history z-score table. They don't change the grade |
+| | **Geography** | Enter or paste regional revenue; share, growth and volatility, headlines for notable swings, and a FACT / POSSIBLE EXPLANATION narrative |
+| | **Governance** | Enter or paste directors; a headline keyword screen reported separately from financial health. Registries (MCA, SEBI, IBBI) aren't connected and the page says so |
+| | **AI Assistant** | Plain-English explanation and a Q&A chat, both grounded in the computed facts only |
+| Reports | **Memo** | A printable credit memo (open to print, or download) |
+| | **Audit Trail** | The agent workflow log and the raw computed data as JSON |
+
+The Upload page also gained an **Industry-specific metrics** card (sector and optional operational inputs, applied
+on the next run) and a shelf-company panel inside the data-credibility card.
+
+The sidebar is a drawer on small screens (Escape closes it, the page behind it doesn't scroll, and it isn't
+focusable while closed). Only its middle section scrolls, with the logo and Security pinned.
 
 ### Look and feel
 
@@ -75,6 +91,7 @@ and status conveyed by text as well as colour.
 | Ingestion | `POST /api/ingest/pdf · ticker · csv`, `GET /api/ingest/csv-template` |
 | Workspace | `GET/DELETE /api/workspace`, `PUT …/scale · qualitative`, `GET …/credibility`, `POST …/supplement/autofetch · apply` |
 | Analysis | `POST /api/analysis`, `GET …/current · {id} · {id}/raw`, `POST {id}/dscr`, `POST {id}/assistant/explain · ask`, `GET {id}/memo` |
+| Intelligence | `GET /api/sectors`, `PUT /api/workspace/sector`, `POST /api/analysis/{id}/forecast/validate · competitive · credit/narrate · geography · geography/extract · governance · governance/extract` (see [KT_INTEGRATION.md](KT_INTEGRATION.md)) |
 | History / Security | `GET /api/history`, `GET /api/security`, `POST …/mfa/begin · confirm · disable`, `POST …/sessions/revoke-others`, `GET /api/admin/security` |
 
 Notable design points:
@@ -104,6 +121,10 @@ All small and backward-compatible; the Streamlit app keeps working.
 - `finveritas/security/audit.py` — client IP can come from the API request.
 - `finveritas/security/sessions.py` — `claims()` (token check without a DB hit) and `last_seen` on new sessions.
 - `finveritas/auth/db.py` — `workspaces`, `analyses`, `analysis_locks` collections.
+- DeterminX integration (see [KT_INTEGRATION.md](KT_INTEGRATION.md)): `finveritas/shared/schema.py` (new statuses, optional fields),
+  the ingestion modules, `analysis/workflow.py` (builds the extended ledger, advisory risks and z-scores), and
+  `api/report.py` / `api/workspace.py` (return them). The new metrics sit in their own ledger so existing grades and
+  prompts don't change.
 
 ## Run it
 

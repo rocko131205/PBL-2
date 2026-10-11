@@ -32,6 +32,9 @@ class CreditMemo(BaseModel):
     risks: List[str] = Field(default_factory=list)
     recommendation: str = ""
     data_coverage_pct: Optional[float] = None
+    # Optional: from the extended (intelligence-layer) metrics. Empty means the section is left out of the memo.
+    working_capital: List[Dict[str, str]] = Field(default_factory=list)   # [{label, value, estimate}]
+    watch_items: List[str] = Field(default_factory=list)                  # advisory only; never affect the grade
     disclaimer: str = (
         "This memo is decision-support for a qualified analyst. It is not a loan approval, "
         "rejection, or binding credit decision. All figures are computed deterministically; "
@@ -54,6 +57,8 @@ def build_memo(
     strengths: Optional[List[str]] = None,
     risks: Optional[List[str]] = None,
     recommendation: str = "",
+    working_capital: Optional[List[Dict[str, str]]] = None,
+    watch_items: Optional[List[str]] = None,
 ) -> CreditMemo:
     ccy = record.currency
     rev = record.latest_value("revenue")
@@ -97,6 +102,8 @@ def build_memo(
         risks=risks or [],
         recommendation=recommendation,
         data_coverage_pct=round(getattr(scorecard, "covered_weight", 0) * 100, 0),
+        working_capital=working_capital or [],
+        watch_items=watch_items or [],
     )
 
 
@@ -115,6 +122,22 @@ def render_memo_html(memo: CreditMemo) -> str:
     )
     strengths = "".join(f"<li>{e(s)}</li>" for s in memo.strengths) or "<li>—</li>"
     risks = "".join(f"<li>{e(r)}</li>" for r in memo.risks) or "<li>—</li>"
+
+    wc_block = ""
+    if memo.working_capital:
+        wc_rows = "".join(
+            f'<tr><td>{e(r["label"])}{" <span class=muted>(estimate)</span>" if r.get("estimate") else ""}</td>'
+            f'<td class="num">{e(r["value"])}</td></tr>' for r in memo.working_capital)
+        wc_block = (
+            f'<h2>Working Capital (Estimate)</h2><table>{wc_rows}</table>'
+            '<p class="muted">Tandon Method II, worked out from the balance sheet alone. Estimated MPBF is an internal '
+            'estimate, not a bank-sanctioned limit. Drawing Power cannot be computed without the bank margins and '
+            'stock/receivables ageing from a sanction letter.</p>')
+    watch_block = ""
+    if memo.watch_items:
+        items = "".join(f"<li>{e(w)}</li>" for w in memo.watch_items)
+        watch_block = (f'<h2>Advisory Watch Items</h2><ul>{items}</ul>'
+                       '<p class="muted">For analyst review. These do not change the credit grade.</p>')
 
     dscr_block = ""
     if memo.dscr_summary:
@@ -170,10 +193,12 @@ def render_memo_html(memo: CreditMemo) -> str:
 </div>
 <h2>Financial Highlights</h2>
 <table>{highlight_rows}</table>
+{wc_block}
 <div class="cols">
   <div><h2>Strengths</h2><ul>{strengths}</ul></div>
   <div><h2>Key Risks</h2><ul>{risks}</ul></div>
 </div>
+{watch_block}
 <h2>Assessment</h2>
 <p style="font-size:14px;">{recommendation}</p>
 <div class="disc">{e(memo.disclaimer)}</div>

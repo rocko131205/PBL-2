@@ -37,6 +37,14 @@
 }
 
 html { color-scheme: dark; }
+
+/* Slim dark scrollbars everywhere: the default light ones clash with the theme and double up when the
+   sidebar and the page both scroll. (Standard properties for Firefox/Chrome, prefixed rules for Safari.) */
+* { scrollbar-width: thin; scrollbar-color: #ffffff2e transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #ffffff2e; border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: #ffffff4d; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
 body {
   min-height: 100vh;
   color: var(--color-ink);

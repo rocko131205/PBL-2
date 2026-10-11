@@ -1,5 +1,5 @@
-import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertOctagon, ArrowDownUp, Download, FileText, Info, Printer, TriangleAlert } from "lucide-react";
 import clsx from "clsx";
@@ -8,11 +8,14 @@ import { C, axis, tooltip } from "@/components/chart";
 import { api } from "@/lib/api";
 import type { Analysis, Factor, Report } from "@/lib/analysis";
 import { parseUtc } from "@/lib/analysis";
+import { ALL_TABS, breadcrumb, tabFromSearch } from "@/lib/analysisNav";
 import { formatRatio } from "@/lib/format";
 import { TrendsSection, PeersSection } from "./Charts";
 import { MetricsTab } from "./Ledger";
 import { DscrSection } from "./Dscr";
 import { AssistantSection } from "./Assistant";
+import { CompetitiveCard, CreditSection, ForecastSection, RiskAlertsSection } from "./Intelligence";
+import { GeographySection, GovernanceSection } from "./Regional";
 
 /* ── Shared bits ────────────────────────────────────────────────────────── */
 
@@ -35,60 +38,39 @@ export const gradeTone = (g: string) =>
   ["AA", "A"].includes(g) ? "text-good" : g === "BBB" ? "text-info" : g === "BB" ? "text-watch" : g === "NR" ? "text-ink-3" : "text-risk";
 export const scoreColor = (s: number) => (s >= 70 ? C.good : s >= 45 ? C.watch : C.risk);
 
-type TabId = "overview" | "trends" | "metrics" | "peers" | "debt" | "assessment" | "assistant" | "memo" | "audit";
-
-const TABS: { id: TabId; label: string }[] = [
-  { id: "overview", label: "Overview" }, { id: "trends", label: "Trends" }, { id: "metrics", label: "Metrics" },
-  { id: "peers", label: "Peers" }, { id: "debt", label: "Debt service" }, { id: "assessment", label: "Assessment" },
-  { id: "assistant", label: "AI assistant" }, { id: "memo", label: "Memo" }, { id: "audit", label: "Audit" },
-];
-
 /* ── Page ───────────────────────────────────────────────────────────────── */
 
 export function ReportView({ analysis, report }: { analysis: Analysis; report: Report }) {
   const finished = parseUtc(analysis.finished_at);
-  // The open tab lives in the URL (?tab=debt) so refresh, back/forward and shared links keep it.
-  const [params, setParams] = useSearchParams();
-  const requested = params.get("tab") as TabId | null;
-  const tab: TabId = TABS.some((t) => t.id === requested) ? requested! : "overview";
-  const open = (id: TabId) => {
-    setParams(id === "overview" ? {} : { tab: id });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  // The open page lives in the URL (?tab=debt), so refresh, back/forward and shared links keep it.
+  // The sidebar (layouts/AnalysisNav.tsx) is what changes it.
+  const { search } = useLocation();
+  const tab = tabFromSearch(search);
+  const trail = breadcrumb(tab);
 
-  // Left/right arrows move between tabs, as screen-reader users expect from a tablist.
-  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-    const i = TABS.findIndex((t) => t.id === tab);
-    const next = TABS[(i + (e.key === "ArrowRight" ? 1 : -1) + TABS.length) % TABS.length].id;
-    open(next);
-    document.getElementById(`tab-${next}`)?.focus();
-  };
+  // Moving to another page of the report starts at the top (but don't jump on the first render).
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [tab]);
 
   return (
     <div className="space-y-6 pb-12">
       <div>
-        <div className="text-xs uppercase tracking-wide text-ink-3">Financial analysis</div>
+        <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1.5 text-xs text-ink-3">
+          {trail.map((part, i) => (
+            <Fragment key={part}>
+              {i > 0 && <span aria-hidden>›</span>}
+              <span className={i === trail.length - 1 ? "font-medium text-brand-700" : undefined} aria-current={i === trail.length - 1 ? "page" : undefined}>{part}</span>
+            </Fragment>
+          ))}
+        </nav>
         <h1 className="text-2xl font-semibold tracking-tight">{report.entity}</h1>
         <div className="text-sm text-ink-3">
           {analysis.source_label}{report.industry ? ` · ${report.industry}` : ""}{report.currency ? ` · ${report.currency}` : ""}
           {finished ? ` · analysed ${finished.toLocaleString()}` : ""}
         </div>
-      </div>
-
-      <div role="tablist" aria-label="Report sections" onKeyDown={onKey}
-        className="glass sticky top-2 z-20 -mx-1 flex gap-1 overflow-x-auto rounded-full bg-[#0b0f16]/95 p-1.5 shadow-lg shadow-black/40 no-print">
-        {TABS.map((t) => {
-          const active = t.id === tab;
-          return (
-            <button key={t.id} id={`tab-${t.id}`} role="tab" aria-selected={active} aria-controls="report-panel"
-              tabIndex={active ? 0 : -1} onClick={() => open(t.id)}
-              className={clsx("whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition",
-                active ? "accent-gradient text-white shadow-[0_8px_24px_-10px_#3b82f6]" : "text-ink-2 hover:bg-white/10 hover:text-ink")}>
-              {t.label}
-            </button>
-          );
-        })}
       </div>
 
       {report.errors.length > 0 && tab === "overview" && (
@@ -98,7 +80,7 @@ export function ReportView({ analysis, report }: { analysis: Analysis; report: R
         </Alert>
       )}
 
-      <div id="report-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+      <div id="report-panel" role="region" aria-label={ALL_TABS.find((t) => t.id === tab)?.label}>
         {tab === "overview" && (
           <Section id="overview" title="Overview" subtitle="Decision-support only — not a lending decision">
             {report.verdict ? <VerdictBanner report={report} /> : <Alert tone="info">Not enough financial data to grade this company yet.</Alert>}
@@ -121,15 +103,46 @@ export function ReportView({ analysis, report }: { analysis: Analysis; report: R
           </Section>
         )}
 
+        {tab === "alerts" && (
+          <Section id="alerts" title="Risk & alerts" subtitle="Trend checks and ratios that broke from the company's own history">
+            <RiskAlertsSection report={report} />
+          </Section>
+        )}
+
         {tab === "peers" && (
           <Section id="peers" title="Peer benchmarking" subtitle="Live data from Yahoo Finance — no AI-estimated values">
             <PeersSection peers={report.peers} metrics={report.peer_metrics} />
+            {report.has_record && <CompetitiveCard analysisId={analysis.id} report={report} />}
+          </Section>
+        )}
+
+        {tab === "forecast" && (
+          <Section id="forecast" title="Forecast check" subtitle="Is your growth assumption realistic? Judged against history, guidance and benchmarks">
+            {report.has_record ? <ForecastSection analysisId={analysis.id} report={report} /> : <Alert tone="info">A forecast check needs a financial record to work from.</Alert>}
           </Section>
         )}
 
         {tab === "debt" && (
           <Section id="debt" title="Debt serviceability" subtitle="DSCR across the full loan life, with stress testing">
             <DscrSection analysisId={analysis.id} report={report} />
+          </Section>
+        )}
+
+        {tab === "credit" && (
+          <Section id="credit" title="Working capital" subtitle="Tandon Method II estimate of bank finance. An estimate, not a sanction">
+            <CreditSection analysisId={analysis.id} report={report} />
+          </Section>
+        )}
+
+        {tab === "geography" && (
+          <Section id="geography" title="Geography" subtitle="Where revenue comes from, and which regions are moving">
+            {report.has_record ? <GeographySection analysisId={analysis.id} report={report} /> : <Alert tone="info">Geography needs a financial record to work from.</Alert>}
+          </Section>
+        )}
+
+        {tab === "governance" && (
+          <Section id="governance" title="Governance" subtitle="Executive background screen, reported separately from financial health">
+            {report.has_record ? <GovernanceSection analysisId={analysis.id} report={report} /> : <Alert tone="info">Governance needs a financial record to work from.</Alert>}
           </Section>
         )}
 

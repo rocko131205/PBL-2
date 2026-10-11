@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { ChevronRight, Sigma } from "lucide-react";
 import clsx from "clsx";
 import { Card } from "@/components/ui";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Drawer } from "@/components/Drawer";
 import { formatPeriod } from "@/lib/format";
 import type { LedgerRow, Report, RiskIndicator } from "@/lib/analysis";
@@ -26,9 +27,12 @@ type Category = { id: string; label: string; count: number; worst: SignalKey };
 
 export function MetricsTab({ report }: { report: Report }) {
   const risk = report.risk;
+  const extended = report.extended?.sections ?? [];
+  const extendedIds = new Set(extended.map((s) => s.category));
+  const sections = [...report.ledger, ...extended];
   const categories: Category[] = [
     ...(risk ? [{ id: "risk", label: "Risk signals", count: risk.indicators.length, worst: worst(risk.indicators.map((i) => i.status)) }] : []),
-    ...report.ledger.map((s) => ({ id: s.category, label: s.title, count: s.rows.length, worst: worst(s.rows.map((r) => r.signal)) })),
+    ...sections.map((s) => ({ id: s.category, label: s.title, count: s.rows.length, worst: worst(s.rows.map((r) => r.signal)) })),
   ];
 
   // Sub-category is kept in the URL too (?tab=metrics&cat=liquidity).
@@ -40,7 +44,8 @@ export function MetricsTab({ report }: { report: Report }) {
   const [detail, setDetail] = useState<LedgerRow | null>(null);
 
   if (categories.length === 0) return <Card className="p-6 text-sm text-ink-3">No metrics could be computed from this data.</Card>;
-  const section = report.ledger.find((s) => s.category === active);
+  const section = sections.find((s) => s.category === active);
+  const inExtended = !!section && extendedIds.has(section.category);
 
   return (
     <div className="space-y-5">
@@ -67,7 +72,11 @@ export function MetricsTab({ report }: { report: Report }) {
               .sort((a, b) => RANK[keyOf(a.signal)] - RANK[keyOf(b.signal)])
               .map((r) => <MetricTile key={r.metric} row={r} onOpen={() => setDetail(r)} />)}
           </div>
-          <p className="text-xs text-ink-3">Concerns and watch items are listed first. Select a metric for its meaning and formula.</p>
+          <p className="text-xs text-ink-3">
+            {inExtended
+              ? <>Additional metrics{report.extended ? ` (${report.extended.coverage_pct.toFixed(0)}% of them had enough data)` : ""}. They are context for an analyst and don't change the credit grade. A tile marked <b>Estimate</b> used a disclosed assumption, and one marked <b>No data</b> or <b>Needs document</b> couldn't be computed from what was loaded.</>
+              : "Concerns and watch items are listed first. Select a metric for its meaning and formula."}
+          </p>
         </>
       ) : null}
 
@@ -124,6 +133,7 @@ function MetricTile({ row, onOpen }: { row: LedgerRow; onOpen: () => void }) {
       {!missing && row.signal && (
         <span className={clsx("mt-2 w-fit rounded-full px-2 py-0.5 text-[11px] font-medium", s.pill)}>{s.label}</span>
       )}
+      <StatusBadge status={row.status} className="mt-2" />
     </button>
   );
 }
@@ -135,10 +145,14 @@ function MetricDetail({ row }: { row: LedgerRow }) {
       <div>
         <div className={clsx("num text-4xl font-semibold", row.value == null ? "text-ink-3" : s.text)}>{row.display}</div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-          <span className={clsx("rounded-full px-2.5 py-0.5 text-xs font-medium", s.pill)}>{s.label}</span>
-          {row.period && <span className="text-ink-3">{formatPeriod(row.period)}</span>}
+          {row.signal && <span className={clsx("rounded-full px-2.5 py-0.5 text-xs font-medium", s.pill)}>{s.label}</span>}
+          <StatusBadge status={row.status} />
+          {row.period && <span className="text-ink-3">{row.period === "multi-period" ? "Across all periods" : formatPeriod(row.period)}</span>}
         </div>
       </div>
+      {row.note && (
+        <section><h3 className="text-xs uppercase tracking-wide text-ink-3">{row.value == null ? "Why there is no number" : "Read with care"}</h3><p className="mt-1.5 text-sm leading-relaxed text-ink-2">{row.note}</p></section>
+      )}
       {row.meaning && (
         <section><h3 className="text-xs uppercase tracking-wide text-ink-3">What it means</h3><p className="mt-1.5 text-sm leading-relaxed text-ink-2">{row.meaning}</p></section>
       )}

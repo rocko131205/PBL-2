@@ -37,6 +37,10 @@ SUPPLEMENTAL_FIELDS: frozenset[str] = frozenset({
     "short_term_debt",
     "cash_and_equivalents",
     "retained_earnings",
+    # Working-capital inputs: both providers return these on the same balance-sheet call.
+    "inventory",
+    "accounts_receivable",
+    "accounts_payable",
 })
 
 # ---------------------------------------------------------------------------
@@ -78,9 +82,15 @@ _FMP_FIELD_MAP: dict[str, str] = {
     "cashAndShortTermInvestments":"cash_and_equivalents",
     "cashAndCashEquivalents":     "cash_and_equivalents",
     "retainedEarnings":           "retained_earnings",
+    "inventory":                  "inventory",
+    "accountsReceivables":        "accounts_receivable",
+    "accountPayables":            "accounts_payable",
 }
 
-_FMP_BASE = "https://financialmodelingprep.com/api/v3"
+# FMP retired the legacy `/api/v3/<statement>/<symbol>` path-param endpoints
+# (403 "Legacy Endpoint" after the August 2025 migration) in favour of
+# `/stable/<statement>?symbol=<symbol>`.
+_FMP_BASE = "https://financialmodelingprep.com/stable"
 
 
 def fetch_missing_from_fmp(
@@ -103,8 +113,8 @@ def fetch_missing_from_fmp(
         ValueError: if the API returns an error or no data.
         requests.HTTPError: on HTTP-level failures.
     """
-    url = f"{_FMP_BASE}/balance-sheet-statement/{ticker}"
-    params = {"period": "annual", "limit": limit, "apikey": fmp_api_key}
+    url = f"{_FMP_BASE}/balance-sheet-statement"
+    params = {"symbol": ticker, "period": "annual", "limit": limit, "apikey": fmp_api_key}
 
     resp = requests.get(url, params=params, timeout=15)
     resp.raise_for_status()
@@ -162,6 +172,9 @@ _AV_FIELD_MAP: dict[str, str] = {
     "shortLongTermDebtTotal":     "total_debt",
     "cashAndCashEquivalentsAtCarryingValue": "cash_and_equivalents",
     "retainedEarnings":           "retained_earnings",
+    "inventory":                  "inventory",
+    "currentNetReceivables":      "accounts_receivable",
+    "currentAccountsPayable":     "accounts_payable",
 }
 
 _AV_BASE = "https://www.alphavantage.co/query"

@@ -37,6 +37,11 @@ _INCOME_MAP: dict[str, str] = {
     "Reconciled Depreciation":                          "depreciation",
     "Depreciation And Amortization In Income Statement":"depreciation",
     "Cost Of Revenue":                                  "cost_of_revenue",
+    "Selling General And Administration":               "sga_expense",
+    "General And Administrative Expense":               "sga_expense",
+    "Research And Development":                         "rd_expense",
+    "Amortization":                                     "amortization",
+    "Amortization Of Intangibles Income Statement":     "amortization",
 }
 
 _BALANCE_MAP: dict[str, str] = {
@@ -71,6 +76,10 @@ _CASHFLOW_MAP: dict[str, str] = {
     "Operating Cash Flow":                            "operating_cash_flow",
     "Cash Flow From Continuing Operating Activities":  "operating_cash_flow",
     "Total Cash From Operating Activities":            "operating_cash_flow",
+    "Investing Cash Flow":                             "investing_cash_flow",
+    "Cash Flow From Continuing Investing Activities":  "investing_cash_flow",
+    "Financing Cash Flow":                             "financing_cash_flow",
+    "Cash Flow From Continuing Financing Activities":  "financing_cash_flow",
     "Capital Expenditure":                             "capital_expenditure",
     "Capital Expenditures":                            "capital_expenditure",
     "Free Cash Flow":                                  "free_cash_flow",

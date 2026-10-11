@@ -104,4 +104,6 @@ def view(doc: dict[str, Any] | None, *, fmp_configured: bool, av_configured: boo
         "qualitative": entity.get("qualitative_context") or "",
         "supplement": {"ticker": doc.get("ticker"), "fmp": is_ticker and fmp_configured, "alphavantage": is_ticker and av_configured},
         "credibility": doc.get("credibility"),
+        "sector": entity.get("sector") or "general",
+        "domain_inputs": entity.get("domain_inputs") or {},
     }

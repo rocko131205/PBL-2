@@ -35,6 +35,10 @@ class FactStatus(str, Enum):
     ESTIMATED = "ESTIMATED"
     INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
     NOT_APPLICABLE = "NOT_APPLICABLE"
+    # Intelligence-layer statuses: the metric is well defined but cannot be
+    # produced from what we hold, and we say exactly what would unlock it.
+    REQUIRES_ADDITIONAL_DOCUMENT = "REQUIRES_ADDITIONAL_DOCUMENT"
+    REQUIRES_EXTERNAL_DATA = "REQUIRES_EXTERNAL_DATA"
 
 
 class CheckStatus(str, Enum):
@@ -84,8 +88,9 @@ class FactLedgerEntry(BaseModel):
     metric: str = Field(..., description="Metric identifier e.g. 'revenue_growth_yoy'")
     display_name: str = Field(..., description="Human-readable name e.g. 'YoY Revenue Growth'")
     category: str = Field(..., description="E.g. 'revenue', 'profitability', 'liquidity', 'solvency', 'saas', 'dscr'")
-    value: Optional[float] = Field(None, description="Computed value (None if insufficient data)")
-    unit: str = Field("absolute", description="E.g. %, ratio, days, absolute")
+    value: Optional[Union[float, str]] = Field(
+        None, description="Computed value, or a label such as 'increasing' (None if insufficient data)")
+    unit: str = Field("absolute", description="E.g. %, ratio, days, absolute, label")
     period: Optional[str] = Field(None, description="Reporting period")
     formula: Optional[str] = Field(None, description="Formula used: e.g. '(Revenue_T - Revenue_T-1) / Revenue_T-1 * 100'")
     inputs_used: List[str] = Field(default_factory=list, description="Source fields used in calculation")
@@ -190,6 +195,20 @@ class NormalizedCompanyRecord(BaseModel):
     basic_eps: List[FinancialPeriod] = Field(default_factory=list)
     diluted_eps: List[FinancialPeriod] = Field(default_factory=list)
 
+    # Intelligence layer: extra statement lines used by cost/efficiency/cash-flow metrics
+    sga_expense: List[FinancialPeriod] = Field(default_factory=list)
+    rd_expense: List[FinancialPeriod] = Field(default_factory=list)
+    amortization: List[FinancialPeriod] = Field(default_factory=list)
+    investing_cash_flow: List[FinancialPeriod] = Field(default_factory=list)
+    financing_cash_flow: List[FinancialPeriod] = Field(default_factory=list)
+
+    # Intelligence layer: opt-in sector metrics, and regional revenue for geography
+    sector: str = Field("general", description="general | saas | banking | retail | manufacturing")
+    domain_inputs: Dict[str, float] = Field(
+        default_factory=dict, description="Operational figures a statement never carries (customers, churn, ...)")
+    segments: Dict[str, Dict[str, float]] = Field(
+        default_factory=dict, description="region -> period -> revenue")
+
     # SaaS-specific or Derived Info
     saas_metrics: Dict[str, Any] = Field(default_factory=dict, description="e.g. ARR, CAC, NRR if available")
     qualitative_context: Optional[str] = Field(None, description="Extracted management commentary or notes")
@@ -229,7 +248,7 @@ class NormalizedCompanyRecord(BaseModel):
         "cash_and_equivalents", "non_current_assets", "non_current_liabilities",
         "retained_earnings", "accounts_receivable", "inventory", "accounts_payable",
         "basic_eps", "diluted_eps",
-    ]
+        "sga_expense", "rd_expense", "amortization", "investing_cash_flow", "financing_cash_flow"]
 
     # Fields expressed in currency (converted during FX normalization).
     # Per-share (EPS) values are NOT scaled — they are already per-share amounts,
@@ -244,7 +263,7 @@ class NormalizedCompanyRecord(BaseModel):
         "cash_and_equivalents", "non_current_assets", "non_current_liabilities",
         "retained_earnings", "accounts_receivable", "inventory", "accounts_payable",
         "basic_eps", "diluted_eps",
-    ]
+        "sga_expense", "rd_expense", "amortization", "investing_cash_flow", "financing_cash_flow"]
 
     def available_fields(self) -> List[str]:
         """Return list of financial fields that have data."""

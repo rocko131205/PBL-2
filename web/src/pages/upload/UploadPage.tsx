@@ -8,6 +8,7 @@ import { useClearWorkspace, useCredibility, useWorkspace, useWorkspaceMutation }
 import { CredibilityCard } from "./CredibilityCard";
 import { KpiCards } from "./KpiCards";
 import { Readiness } from "./Readiness";
+import { SectorCard } from "./SectorCard";
 import { SourcePicker } from "./SourcePicker";
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
@@ -53,6 +54,10 @@ function Loaded({ ws }: { ws: WorkspaceLoaded }) {
 
       <Section title="Qualitative context" subtitle="Optional management commentary or earnings-call notes. It adds soft context to the analysis and never changes a computed number.">
         <Qualitative initial={ws.qualitative} />
+      </Section>
+
+      <Section title="Industry-specific metrics" subtitle="Optional. Adds measures such as CAC and LTV for software, NPAs for banks, or capacity use for manufacturers.">
+        <SectorCard ws={ws} />
       </Section>
 
       <Preview rows={ws.preview} />

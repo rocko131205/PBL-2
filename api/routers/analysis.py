@@ -155,7 +155,9 @@ def _fact_lines(doc: dict[str, Any]) -> list[str]:
     if record is None:
         return []
     sc = report.scorecard_for(doc["result"], record, (doc.get("dscr") or {}).get("min_dscr"))
-    return report.scorecard_fact_line(sc)
+    # The extended metrics (working capital, cash flow, advisory flags) are included so the assistant can
+    # discuss them; the digest is short and its estimates are labelled.
+    return report.scorecard_fact_line(sc) + report.extended_fact_lines(report.extended_summary(doc["result"], record))
 
 
 @router.post("/{analysis_id}/assistant/explain")
@@ -196,11 +198,13 @@ def memo(analysis_id: str, download: bool = False, user: dict = Depends(current_
     min_dscr = (doc.get("dscr") or {}).get("min_dscr")
     sc = report.scorecard_for(state, record, min_dscr)
     credit = state.get("credit_report") or {}
+    working_capital, watch_items = report.memo_extras(report.extended_summary(state, record))
     m = build_memo(
         record, sc, min_dscr=min_dscr,
         dscr_risk=(state.get("dscr_result") or {}).get("risk_level"),
         strengths=credit.get("major_strengths", []), risks=credit.get("major_risks", []),
         recommendation=credit.get("recommendation_narrative", ""),
+        working_capital=working_capital, watch_items=watch_items,
     )
     headers = dict(MEMO_HEADERS)
     if download:

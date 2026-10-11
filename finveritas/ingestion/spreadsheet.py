@@ -55,6 +55,10 @@ _CANONICAL_FIELDS: frozenset[str] = frozenset({
     "depreciation", "total_debt", "long_term_debt", "short_term_debt",
     "cash_and_equivalents", "non_current_assets", "non_current_liabilities",
     "retained_earnings", "basic_eps", "diluted_eps", "cost_of_revenue",
+    "accounts_receivable", "inventory", "accounts_payable",
+    "operating_cash_flow", "capital_expenditure", "free_cash_flow",
+    "sga_expense", "rd_expense", "amortization",
+    "investing_cash_flow", "financing_cash_flow",
 })
 
 _PERIOD_COL = "period"
@@ -209,13 +213,18 @@ def load_private_company_data(
 
 
 def get_template_csv() -> str:
-    """Return a CSV template string that users can download as a starting point."""
-    return (
-        "period,revenue,gross_profit,operating_income,net_income,"
-        "total_assets,total_liabilities,current_assets,current_liabilities,equity\n"
-        "2020-FY,,,,,,,,,\n"
-        "2021-FY,,,,,,,,,\n"
-        "2022-FY,,,,,,,,,\n"
-        "2023-FY,,,,,,,,,\n"
-        "2024-FY,,,,,,,,,\n"
-    )
+    """Return a CSV template string that users can download as a starting point.
+
+    The first block of columns is the minimum for a credit analysis; the rest are
+    optional and unlock the cost, efficiency, cash-flow and working-capital metrics.
+    """
+    columns = [
+        "period", "revenue", "gross_profit", "operating_income", "net_income",
+        "total_assets", "total_liabilities", "current_assets", "current_liabilities", "equity",
+        "inventory", "accounts_receivable", "accounts_payable", "operating_cash_flow",
+        "investing_cash_flow", "financing_cash_flow", "capital_expenditure",
+        "sga_expense", "rd_expense", "amortization",
+    ]
+    blanks = "," * (len(columns) - 1)
+    rows = [f"{year}-FY{blanks}" for year in range(2020, 2025)]
+    return "\n".join([",".join(columns), *rows]) + "\n"

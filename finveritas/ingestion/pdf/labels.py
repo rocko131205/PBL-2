@@ -99,6 +99,30 @@ _FIELD_MAP: dict[str, list[re.Pattern[str]]] = {
         re.compile(r"^depreciation\s*(?:&|and)\s*amortization", re.IGNORECASE),
         re.compile(r"^D&A$", re.IGNORECASE),
     ],
+    # Only when amortization is its own line (not folded into D&A above).
+    "amortization": [
+        re.compile(r"^amortization(?:\s+expense)?$", re.IGNORECASE),
+    ],
+    "sga_expense": [
+        re.compile(r"^selling,?\s*general\s*(?:&|and)\s*administrative", re.IGNORECASE),
+        re.compile(r"^SG&A$", re.IGNORECASE),
+    ],
+    "rd_expense": [
+        re.compile(r"^research\s*(?:&|and)\s*development", re.IGNORECASE),
+        re.compile(r"^R&D$", re.IGNORECASE),
+    ],
+    "operating_cash_flow": [
+        re.compile(r"^(?:net\s+)?cash\s+(?:flow\s+)?(?:from|generated\s+(?:from|by))\s+operat", re.IGNORECASE),
+        re.compile(r"^operating\s+cash\s+flow", re.IGNORECASE),
+    ],
+    "investing_cash_flow": [
+        re.compile(r"^(?:net\s+)?cash\s+(?:flow\s+)?(?:from|used\s+in)\s+invest", re.IGNORECASE),
+        re.compile(r"^investing\s+cash\s+flow", re.IGNORECASE),
+    ],
+    "financing_cash_flow": [
+        re.compile(r"^(?:net\s+)?cash\s+(?:flow\s+)?(?:from|used\s+in)\s+financ", re.IGNORECASE),
+        re.compile(r"^financing\s+cash\s+flow", re.IGNORECASE),
+    ],
 
     # ── Balance Sheet fields ─────────────────────────────────────────────
     "total_assets": [

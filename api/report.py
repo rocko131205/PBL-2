@@ -10,8 +10,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from finveritas.analysis.metrics.anomaly import detect_anomalies
+from finveritas.analysis.metrics.anomaly import detect_anomalies, zscore_scan
 from finveritas.analysis.metrics.debt_service import DSCRScheduleResult
+from finveritas.analysis.metrics.extended import build_extended_ledger, compute_advisory_risks
+from finveritas.analysis.metrics.extended.domain import DOMAIN_INPUT_FIELDS
 from finveritas.analysis.metrics.forecast import forecast_field
 from finveritas.analysis.metrics.scorecard import CreditScorecard, compute_scorecard
 from finveritas.shared.formatting import format_money
@@ -91,9 +93,18 @@ def available_bases(record: NormalizedCompanyRecord) -> list[dict[str, str]]:
     return [{"key": b, "label": BASIS_LABELS[b]} for b in ("cfads", "ocf", "ebitda", "ebit") if have[b]]
 
 
-def ledger_display(value: float | None, unit: str, currency: str | None = None) -> str:
+_GAP_TEXT = {
+    "INSUFFICIENT_DATA": "Insufficient data",
+    "REQUIRES_ADDITIONAL_DOCUMENT": "Needs an extra document",
+    "REQUIRES_EXTERNAL_DATA": "Needs external data",
+}
+
+
+def ledger_display(value: float | str | None, unit: str, currency: str | None = None) -> str:
     if value is None:
         return "N/A"
+    if isinstance(value, str):  # a label such as a trend direction ("increasing")
+        return value
     if unit == "%":
         return f"{value:.2f}%"
     if unit in ("x", "ratio"):
@@ -157,11 +168,10 @@ def _trends(record: NormalizedCompanyRecord) -> dict[str, Any] | None:
     return {"revenue": revenue, "margin": margin}
 
 
-def _ledger(state: dict[str, Any]) -> list[dict[str, Any]]:
-    entries = (state.get("fact_ledger") or {}).get("entries") or []
-    currency = (state.get("fact_ledger") or {}).get("currency") or (state.get("company_record") or {}).get("currency")
+def _ledger_sections(entries: list[dict[str, Any]], currency: str | None,
+                     layout: list[tuple[str, str]]) -> list[dict[str, Any]]:
     sections = []
-    for category, title in LEDGER_SECTIONS:
+    for category, title in layout:
         rows = []
         for e in entries:
             if e.get("category") != category:
@@ -171,17 +181,142 @@ def _ledger(state: dict[str, Any]) -> list[dict[str, Any]]:
                 "metric": e.get("metric"),
                 "name": e.get("display_name") or e.get("metric"),
                 "value": value,
-                "display": "Insufficient data" if value is None and e.get("status") == "INSUFFICIENT_DATA"
+                "display": _GAP_TEXT.get(e.get("status") or "", "N/A") if value is None
                 else ledger_display(value, e.get("unit") or "", currency),
                 "signal": e.get("risk_signal"),          # PASS | WARN | FAIL | None
                 "signal_detail": e.get("risk_detail"),
                 "formula": e.get("formula"),
                 "meaning": meaning_for(e.get("metric")),
                 "period": e.get("period"),
+                # VALID | ESTIMATED | INSUFFICIENT_DATA | REQUIRES_*: lets the UI mark estimates and gaps
+                "status": e.get("status") or "VALID",
+                "note": e.get("notes"),
             })
         if rows:
             sections.append({"category": category, "title": title, "rows": rows})
     return sections
+
+
+def _ledger(state: dict[str, Any]) -> list[dict[str, Any]]:
+    ledger = state.get("fact_ledger") or {}
+    currency = ledger.get("currency") or (state.get("company_record") or {}).get("currency")
+    return _ledger_sections(ledger.get("entries") or [], currency, LEDGER_SECTIONS)
+
+
+# The intelligence layer's metrics live in their own ledger (see metrics/extended/engine.py).
+EXTENDED_SECTIONS = [
+    ("revenue", "Revenue & growth"),
+    ("growth", "Growth rates"),
+    ("trend", "Trends"),
+    ("cost", "Cost structure"),
+    ("efficiency", "Efficiency"),
+    ("returns", "Returns on capital"),
+    ("cash_flow", "Cash flow"),
+    ("credit", "Working-capital credit (Tandon Method II)"),
+    ("domain", "Sector-specific metrics"),
+]
+
+
+def _extended(state: dict[str, Any], record: NormalizedCompanyRecord | None) -> dict[str, Any] | None:
+    """Extended metrics, advisory risk checks and own-history z-scores.
+
+    Runs saved before this layer existed don't carry them, so they are derived on demand from the stored
+    record (deterministic and cheap) instead of requiring the analysis to be re-run.
+    """
+    if record is None:
+        return None
+    ledger = state.get("extended_ledger")
+    advisory = state.get("advisory_risks")
+    ratios = state.get("ratio_anomalies")
+    try:
+        if not ledger:
+            ledger = build_extended_ledger(record)[0].model_dump()
+        if advisory is None:
+            advisory = [r.model_dump() for r in compute_advisory_risks(record)]
+        if ratios is None:
+            ratios = zscore_scan(record).model_dump()
+    except Exception:
+        return None
+    entries = ledger.get("entries") or []
+    usable = [e for e in entries if e.get("value") is not None and e.get("status") in ("VALID", "ESTIMATED")]
+    counts: dict[str, int] = {}
+    for e in entries:
+        counts[e.get("status") or "VALID"] = counts.get(e.get("status") or "VALID", 0) + 1
+    return clean({
+        "sections": _ledger_sections(entries, record.currency, EXTENDED_SECTIONS),
+        "coverage_pct": round(len(usable) / len(entries) * 100, 1) if entries else 0.0,
+        "status_counts": counts,
+        "advisory_risks": advisory,
+        "ratio_anomalies": ratios,
+        "sector": {"value": record.sector, "domain_inputs": record.domain_inputs,
+                   "input_fields": DOMAIN_INPUT_FIELDS},
+    })
+
+
+# The handful of extended metrics worth putting in front of the assistant and in the memo. Deliberately short:
+# the full set is ~50 entries and would swamp a small local model's context.
+_KEY_EXTENDED = [
+    "revenue_cagr", "revenue_trend_direction", "profit_trend", "margin_trend", "debt_trend",
+    "cf_free_cash_flow", "operating_cash_flow_ratio", "cash_burn", "roic", "asset_turnover",
+]
+_WORKING_CAPITAL = ["gross_working_capital", "working_capital_gap", "minimum_stipulated_nwc", "estimated_mpbf",
+                    "current_asset_coverage_ratio", "operating_cycle"]
+_DRAWING_POWER_NOTE = "Drawing Power cannot be computed: it needs the bank's margins and stock/receivables ageing from a sanction letter."
+
+
+def extended_summary(state: dict[str, Any], record: NormalizedCompanyRecord | None) -> dict[str, Any] | None:
+    """A compact, pre-formatted digest of the extended results, shared by the AI assistant and the credit memo.
+
+    Everything here is already computed; this only selects and labels it. Estimates are marked as such, and
+    advisory flags are kept apart from the credit grade.
+    """
+    ext = _extended(state, record)
+    if not ext:
+        return None
+    rows = {r["metric"]: r for s in ext["sections"] for r in s["rows"]}
+
+    def pick(metrics: list[str]) -> list[dict[str, str]]:
+        return [{"label": rows[m]["name"], "value": rows[m]["display"], "estimate": rows[m]["status"] == "ESTIMATED"}
+                for m in metrics if m in rows and rows[m]["value"] is not None]
+
+    sector = [{"label": r["name"], "value": r["display"], "estimate": False}
+              for s in ext["sections"] if s["category"] == "domain" for r in s["rows"] if r["value"] is not None]
+    watch = [{"name": a["name"], "status": a["status"], "detail": a["detail"]}
+             for a in ext["advisory_risks"] if a["status"] in ("WARN", "FAIL")]
+    flags = [{"name": r["label"], "status": r["status"], "detail": r["detail"]}
+             for r in ext["ratio_anomalies"]["results"] if r["status"] in ("WARN", "FAIL")]
+    return {"facts": pick(_KEY_EXTENDED) + sector, "working_capital": pick(_WORKING_CAPITAL),
+            "watch": watch, "flags": flags}
+
+
+def extended_fact_lines(summary: dict[str, Any] | None) -> list[str]:
+    """The digest as grounded text lines for the AI assistant."""
+    if not summary:
+        return []
+    def tag(f): return " (ESTIMATE)" if f["estimate"] else ""
+    lines: list[str] = []
+    if summary["facts"]:
+        lines.append("\nAdditional computed metrics:")
+        lines += [f"- {f['label']}: {f['value']}{tag(f)}" for f in summary["facts"]]
+    if summary["working_capital"]:
+        lines.append("\nWorking-capital assessment (Tandon Method II). These are estimates from the balance sheet, not a bank-sanctioned limit:")
+        lines += [f"- {f['label']}: {f['value']}{tag(f)}" for f in summary["working_capital"]]
+        lines.append(f"- {_DRAWING_POWER_NOTE}")
+    if summary["watch"] or summary["flags"]:
+        lines.append("\nAdvisory flags (for review; they do not change the credit grade):")
+        lines += [f"- {w['name']} [{w['status']}]: {w['detail']}" for w in summary["watch"]]
+        lines += [f"- {w['name']} vs its own history [{w['status']}]: {w['detail']}" for w in summary["flags"]]
+    return lines
+
+
+def memo_extras(summary: dict[str, Any] | None) -> tuple[list[dict[str, str]], list[str]]:
+    """(working-capital rows, advisory watch items) for the credit memo."""
+    if not summary:
+        return [], []
+    wc = [{"label": f["label"], "value": f["value"], "estimate": "yes" if f["estimate"] else ""} for f in summary["working_capital"]]
+    watch = [f"{w['name']}: {w['detail']}" for w in summary["watch"]]
+    watch += [f"{w['name']} vs its own history: {w['detail']}" for w in summary["flags"]]
+    return wc, watch
 
 
 def _risk(state: dict[str, Any]) -> dict[str, Any] | None:
@@ -266,9 +401,14 @@ def build(doc: dict[str, Any]) -> dict[str, Any]:
         "dscr_terms": dscr.get("terms"),
         "ai": doc.get("ai") or {"explain": None, "qa": []},
         "verdict": None, "scorecard": None, "anomalies": None, "trends": None, "dscr_bases": [],
+        "extended": None,
+        # Saved results of the on-demand agents (forecast check, competitive, geography, governance, credit).
+        "intelligence": clean(doc.get("intelligence") or {}),
+        "default_peer_tickers": [p.get("ticker") for p in peers if p.get("ticker")],
     }
     if record is None:
         return out
+    out["extended"] = _extended(state, record)
 
     sc = scorecard_for(state, record, min_dscr)
     anomalies = detect_anomalies(record)

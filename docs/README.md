@@ -24,7 +24,9 @@ number in Python) and the AI layer (which only narrates). See the full diagram a
 breakdown in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 For the file tree and execution order, see **[STRUCTURE.md](STRUCTURE.md)**; for how the
-system evolved (V1 → V2 → V3), see **[VERSION_HISTORY.md](VERSION_HISTORY.md)**.
+system evolved (V1 → V2 → V3 → V4), see **[VERSION_HISTORY.md](VERSION_HISTORY.md)**. The React + FastAPI
+front end is described in **[UI_REVAMP.md](UI_REVAMP.md)**, and the features brought in from the DeterminX fork in
+**[KT_INTEGRATION.md](KT_INTEGRATION.md)**.
 
 ---
 
@@ -42,6 +44,16 @@ system evolved (V1 → V2 → V3), see **[VERSION_HISTORY.md](VERSION_HISTORY.md
 - **Trends & forecast** — history plus a 3-year projection (base / optimistic / pessimistic).
 - **Peer benchmarking** — real peer data fetched from yfinance (never LLM-estimated).
 - **Anomaly alerts** — large swings, sign flips, balance-sheet-that-doesn't-tie, impossible values.
+- **Risk & alerts** — trend checks (falling profit, margin compression, rising debt, cash-flow and receivables
+  warnings) and ratios that broke from the company's own history. Advisory: they never change the grade.
+- **Extended metrics** — cost, efficiency, ROIC, cash flow, growth and trend metrics, plus optional sector metrics
+  (SaaS, banking, retail, manufacturing). Every metric says if it is an estimate or why it has no number.
+- **Forecast check** — test a growth assumption against the company's own history, management guidance and a
+  benchmark; Python decides the verdict, the AI explains it.
+- **Working capital** — a Tandon Method II estimate of bank finance (clearly an estimate, never a sanction).
+- **Geography and Governance** — regional revenue share and growth, and a director background screen reported
+  separately from financial health.
+- **Shelf-company check** — flags dormant or shell-like entities during the credibility check.
 - **AI assistant** — "explain these results" + a scoped "ask about this company" chat,
   grounded strictly in the computed facts.
 - **Credit Memo** — a one-page lender memo, downloadable and printable to PDF.
@@ -58,7 +70,7 @@ system evolved (V1 → V2 → V3), see **[VERSION_HISTORY.md](VERSION_HISTORY.md
 | **Currency-correct** | FX-normalizable; INR shows in lakh/crore, others in K/M/B/T; reported-unit rescaling |
 | **Guardrailed AI** | Any OpenAI-compatible endpoint (Groq, LM Studio, Ollama, OpenAI); explains, never calculates |
 | **Security** | bcrypt, TOTP MFA, revocable server-side JWT sessions, lockout, hardened OTP reset, audit log, admin dashboard, prompt-injection guard — see [SECURITY.md](../SECURITY.md) |
-| **Tested** | 266 pytest tests (113 security regression tests) + bandit / pip-audit / gitleaks in CI |
+| **Tested** | 368 pytest tests (113 security regression tests) + bandit / pip-audit / gitleaks in CI. The extended metrics and intelligence agents don't have their own tests yet |
 
 ---
 
@@ -116,7 +128,7 @@ numbers work regardless.
 ## Testing
 
 ```sh
-pytest                     # 266 tests
+pytest                     # 368 tests
 pytest tests/security -q   # security regression suite only
 ```
 

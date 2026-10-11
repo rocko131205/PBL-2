@@ -12,7 +12,8 @@
 |--------|----------|-------|
 | **V1** | Original app: 5 agents in a fixed line, LLM allowed to guess numbers | Replaced |
 | **V2** | Rebuilt so **Python does all math**, LLM only explains; LangGraph orchestration | **Current, built** |
-| **V3** | Repo cleaned + hardened, plus a roadmap of features not yet built | **This cleanup done; roadmap planned** |
+| **V3** | Repo cleaned + hardened, plus a roadmap of features not yet built | **Cleanup and revamp done** |
+| **V4** | DeterminX features ported in: extended metrics, forecast check, competitive, geography, governance, shelf-company filter | **Built; some extras and the tests still open** |
 
 **The one idea that defines the project:** *All financial numbers are calculated in
 Python. The LLM never does math — it only turns pre-computed numbers into words.*
@@ -153,9 +154,47 @@ Built in tested, committed phases (109 tests passing):
 - Harden the LLM layer (reliable JSON parsing + stronger-model option).
 - Persist analyses to MongoDB (history + compare over time).
 - Peer percentile positioning + radar chart.
-- Further capability agents from the original V2 roadmap:
-  Assumption Validation, Anomaly/Alert detection, Working Capital & MPBF,
-  Geography-wise impact, Executive/Governance background.
+- ~~Further capability agents from the original V2 roadmap: Assumption Validation, Anomaly/Alert
+  detection, Working Capital & MPBF, Geography-wise impact, Executive/Governance background.~~
+  **Done in V4** (below).
+
+---
+
+## V4 — DeterminX integration
+
+DeterminX was a parallel Streamlit fork that had built the roadmap items above. Its features were **ported into
+this codebase's own schema and architecture** rather than run alongside it. The full file-by-file map, design
+decisions and API are in **[KT_INTEGRATION.md](KT_INTEGRATION.md)**.
+
+### Built ✅
+
+1. **Data foundation.** Five new statement fields (SG&A, R&D, amortization, investing and financing cash flow)
+   through ticker, PDF, CSV and the data model; two new ledger statuses (`REQUIRES_ADDITIONAL_DOCUMENT`,
+   `REQUIRES_EXTERNAL_DATA`); the FMP gap-fill moved to FMP's current `/stable/` endpoint and now also back-fills
+   inventory, receivables and payables.
+2. **Shelf-company filter.** Four dormant/shell signals added to the data-credibility score (weight 15), shown as a
+   Clear / Caution / High risk panel on the Upload page.
+3. **Extended metrics** (a separate ledger): cost, efficiency, ROIC, cash flow, growth, trends, Tandon Method II
+   working capital, and sector metrics for SaaS, banking, retail and manufacturing (with a sector picker).
+4. **Advisory risk checks and own-history z-scores.** Six trend checks plus a z-score scan of five structural ratios.
+   Neither changes the credit grade.
+5. **Intelligence agents**, each a deterministic core with LLM narration: forecast assumption validation,
+   ten-metric competitive benchmark, working-capital narration, geography, governance. Backed by an external-data
+   layer (World Bank, NewsAPI, guidance; analyst estimates and MCA/SEBI/IBBI registries are "not configured").
+6. **Assistant and memo.** The AI assistant answers from a short digest of the extended facts (working capital, cash flow,
+   advisory flags), and the credit memo gains Working Capital (Estimate) and Advisory Watch Items sections.
+7. **API and UI.** Nine new endpoints; new Risk, Forecast, Working-capital, Geography and Governance pages; a
+   benchmark card on Peers; and the Analysis tab bar replaced by an expandable sidebar menu.
+
+### Honest limits ⚠
+
+- **Not built:** vLLM / AMD ROCm / Groq provider selection, the DPDP consent gate and tamper-evident audit chain.
+- **No automated tests yet** for the new code (the existing suite, 368 tests, still passes).
+- Regional amounts aren't currency-converted.
+- The z-score check is sensitive on short histories (flags mean "worth a look", not a verdict).
+- Not cross-checked against DeterminX's own example output; the new UI hasn't had a visual review.
+
+Deliberately left out: the meta-orchestrator with drift detection and Account Aggregator ingest.
 
 ---
 
@@ -164,4 +203,4 @@ Built in tested, committed phases (109 tests passing):
 All source is under `finveritas/`, grouped by the user journey.
 See **[STRUCTURE.md](STRUCTURE.md)** for the full file tree and execution flow.
 
-*Last updated: 2026-09-24 (V3 revamp built on branch `V3-revamp`).*
+*Last updated: 2026-10-12 (V4 DeterminX integration on branch `ui-enhancement`).*

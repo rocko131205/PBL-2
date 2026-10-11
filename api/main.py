@@ -19,7 +19,7 @@ load_dotenv()
 from api.deps import client_ip  # noqa: E402
 from api import jobs  # noqa: E402
 from api.limits import BodyLimitMiddleware  # noqa: E402
-from api.routers import analysis, auth, history, ingest, security  # noqa: E402
+from api.routers import analysis, auth, history, ingest, intelligence, security  # noqa: E402
 from finveritas.security import audit  # noqa: E402
 from finveritas.security.config import validate_startup  # noqa: E402
 
@@ -63,6 +63,7 @@ def health() -> dict[str, str]:
 app.include_router(auth.router)
 app.include_router(ingest.router)
 app.include_router(analysis.router)
+app.include_router(intelligence.router)
 app.include_router(history.router)
 app.include_router(security.router)
 

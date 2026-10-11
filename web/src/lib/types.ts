@@ -57,6 +57,9 @@ export interface WorkspaceLoaded {
   qualitative: string;
   supplement: { ticker: string | null; fmp: boolean; alphavantage: boolean };
   credibility: Credibility | null;
+  /** Sector-specific metrics are opt-in; "general" adds none. Takes effect on the next analysis run. */
+  sector: string;
+  domain_inputs: Record<string, number>;
 }
 
 export type Workspace = WorkspaceEmpty | WorkspaceLoaded;

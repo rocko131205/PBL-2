@@ -37,7 +37,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
+from finveritas.analysis.metrics.anomaly import zscore_scan
 from finveritas.analysis.metrics.dscr import compute_dscr, dscr_to_fact_entry
+from finveritas.analysis.metrics.extended import build_extended_ledger, compute_advisory_risks
 from finveritas.security import llm_guard
 from finveritas.ingestion.normalize import payload_to_normalized_record
 from finveritas.analysis.metrics.profitability import compute_profitability_metrics
@@ -100,6 +102,11 @@ class WorkflowState(TypedDict, total=False):
 
     # Risk dashboard
     risk_dashboard: Optional[Dict[str, Any]]  # Serialized RiskDashboard
+
+    # Intelligence layer (advisory; kept apart so the verdict and LLM prompts above are unchanged)
+    extended_ledger: Optional[Dict[str, Any]]    # Serialized FinancialFactLedger (extended metrics)
+    advisory_risks: Optional[List[Dict[str, Any]]]  # Serialized RiskIndicator list
+    ratio_anomalies: Optional[Dict[str, Any]]    # Serialized RatioAnomalyScan (own-history z-scores)
 
     # Qualitative findings
     qualitative_findings: List[str]
@@ -373,6 +380,25 @@ def financial_computation_node(state: WorkflowState) -> WorkflowState:
     )
     state["fact_ledger"] = ledger.model_dump()
     _log(state, f"Financial Computation: Fact ledger built with {len(all_entries)} entries")
+
+    # Intelligence layer: extended metrics, advisory risk checks and own-history z-scores.
+    # Each is isolated so a failure here can never affect the core ledger or the verdict.
+    try:
+        extended, ext_errors = build_extended_ledger(record)
+        state["extended_ledger"] = extended.model_dump()
+        for err in ext_errors:
+            state.setdefault("errors", []).append(f"Extended metrics ({err})")
+        _log(state, f"Financial Computation: extended ledger built with {len(extended.entries)} entries")
+    except Exception as exc:
+        state.setdefault("errors", []).append(f"Extended metrics: {exc}")
+    try:
+        state["advisory_risks"] = [r.model_dump() for r in compute_advisory_risks(record)]
+    except Exception as exc:
+        state.setdefault("errors", []).append(f"Advisory risk checks: {exc}")
+    try:
+        state["ratio_anomalies"] = zscore_scan(record).model_dump()
+    except Exception as exc:
+        state.setdefault("errors", []).append(f"Ratio anomaly scan: {exc}")
 
     return state
 
